@@ -52,26 +52,6 @@ class MetricScore:
         )
 
 
-def _measure_one(
-    metric: DeterministicMetric, tc: TestCase, ignore_errors: bool
-) -> MetricScore:
-    """Run a single deterministic metric on a test case."""
-    try:
-        metric.measure(tc)
-    except Exception as e:
-        if not ignore_errors:
-            raise
-        return MetricScore(
-            name=metric.__name__, score=None, success=False, error=str(e)
-        )
-    return MetricScore(
-        name=metric.__name__,
-        score=metric.score,
-        success=metric.is_successful(),
-        reason=metric.reason,
-    )
-
-
 def _evaluate_deterministic(
     test_cases: list[TestCase],
     metrics: list[DeterministicMetric],
@@ -81,7 +61,26 @@ def _evaluate_deterministic(
     lookup: EvalLookup = defaultdict(list)
     for tc in test_cases:
         sid = _get_sample_id(tc)
-        lookup[sid].extend(_measure_one(m, tc, ignore_errors) for m in metrics)
+        for metric in metrics:
+            try:
+                metric.measure(tc)
+            except Exception as e:
+                if not ignore_errors:
+                    raise
+                lookup[sid].append(
+                    MetricScore(
+                        name=metric.__name__, score=None, success=False, error=str(e)
+                    )
+                )
+                continue
+            lookup[sid].append(
+                MetricScore(
+                    name=metric.__name__,
+                    score=metric.score,
+                    success=metric.is_successful(),
+                    reason=metric.reason,
+                )
+            )
     return lookup
 
 

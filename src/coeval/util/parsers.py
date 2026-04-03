@@ -42,7 +42,7 @@ def extract_think_content(text: str) -> str:
 def strip_think_blocks(text: str) -> str:
     """Remove <think>...</think> reasoning blocks, keeping only the final answer.
 
-    Think-model outputs (e.g. Tri-21B-Think via vLLM) include a full reasoning
+    Think-model outputs include a full reasoning
     trace inside <think>…</think> before the actual response. Evaluation judges
     must only see the final answer — not the internal "mental simulation" that
     may contain fake citations or placeholder reasoning.
@@ -50,8 +50,7 @@ def strip_think_blocks(text: str) -> str:
     Four cases handled:
     1. Normal: <think>…</think> followed by answer → strip block, keep answer.
     2. Think-only output: entire response is inside <think>…</think> with nothing
-       after it (common for Tri-21B-Think on short-answer queries) → extract the
-       think block's content as the answer rather than returning empty string.
+       after it → extract the think block's content as the answer rather than returning empty string.
     3. Unclosed <think>: model hit max_tokens mid-reasoning, no </think> emitted
        → extract whatever partial content was written inside the block rather than
        discarding it (applies to any model that hits the token limit mid-think).
