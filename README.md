@@ -153,9 +153,9 @@ All datasets are evaluated as **MCQ (multiple-choice question)** unless noted ot
 | [KorMedMCQA](https://huggingface.co/datasets/sean0042/KorMedMCQA) | `kormedmcqa` | Korean medical exams | 5-option MCQ | MCQ Accuracy |
 | [MedHallu](https://huggingface.co/datasets/UTAustin-AIHealth/MedHallu) | `medhallu` | Hallucination detection | Binary classification | Macro F1 |
 | [MedCalc](https://huggingface.co/datasets/ncbi/MedCalc-Bench) | `medcalc` | Clinical calculation | Open-ended numeric | Numeric Accuracy |
-| [PubMedQA](https://huggingface.co/datasets/qiaojin/PubMedQA) | `pubmedqa` | 3-option MCQ (Yes/No/Maybe) | MCQ Accuracy |
-| [HealthBench](https://huggingface.co/datasets/openai/HealthBench) | `healthbench_consensus` | Open-ended multi-turn | LLM-as-judge (rubric) |
-| [AttributionBench](https://huggingface.co/datasets/osunlp/AttributionBench) | `attributionbench` | Binary classification (attributable/not) | Macro F1 |
+| [PubMedQA](https://huggingface.co/datasets/qiaojin/PubMedQA) | `pubmedqa` | PubMed abstracts | 3-option MCQ (Yes/No/Maybe) | MCQ Accuracy |
+| [HealthBench](https://huggingface.co/datasets/openai/HealthBench) | `healthbench_consensus` | OpenAI | Open-ended multi-turn | LLM-as-judge (rubric) |
+| [AttributionBench](https://huggingface.co/datasets/osunlp/AttributionBench) | `attributionbench` | OSU NLP | Binary classification | Macro F1 |
 
 ```bash
 mise run eval -- datasets=medqa              # Single dataset
