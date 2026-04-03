@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  MISE_PYTHON_GITHUB_ATTESTATIONS: "false"
+
 jobs:
   lint:
     name: Lint
