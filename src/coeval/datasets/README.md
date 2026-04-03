@@ -11,7 +11,7 @@ CoEval datasets are simple: a **Python loader** that returns `Golden` objects + 
 src/coeval/
 ├── datasets/
 │   ├── base.py              # GoldenDatasetBase, MultiTurnDatasetBase
-│   ├── medqa.py             # 18 dataset loaders (one file each)
+│   ├── medqa.py             # 17 dataset loaders (one file each)
 │   ├── healthbench.py
 │   └── ...
 └── conf/datasets/
