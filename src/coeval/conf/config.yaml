@@ -1,0 +1,14 @@
+# CoEval Configuration
+defaults:
+  - _self_
+  - hydra: default
+  - runner: default
+  - client: passthrough
+  - datasets: pubmedqa
+
+num_samples: null
+system_prompt: "You are a medical AI assistant. For each question, reason step-by-step, then provide the answer."
+
+output:
+  save_results: true
+  output_dir: evaluation_outputs

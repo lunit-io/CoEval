@@ -1,0 +1,3 @@
+# Macro-averaged F1 score aggregator for classification tasks.
+_target_: coeval.util.aggregation.f1_aggregator
+_partial_: true

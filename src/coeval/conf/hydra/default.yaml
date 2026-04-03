@@ -1,0 +1,3 @@
+# Default hydra configuration
+run:
+  dir: ${output.output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}

@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - metrics@metrics.mmlu_pro_health: mcq_accuracy
+  - metrics/aggregator@score_aggregators.mmlu_pro_health: default
+
+# MMLU Pro Health Dataset
+datasets:
+  mmlu_pro_health:
+    _target_: coeval.datasets.mmlu_pro_health.MMLUProHealthDataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

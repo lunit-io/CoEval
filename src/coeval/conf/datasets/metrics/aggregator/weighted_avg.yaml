@@ -1,0 +1,6 @@
+# Sample-weighted average across subsets — larger subsets contribute more.
+_target_: coeval.util.aggregation.merge_summaries
+_partial_: true
+merge_metric:
+  _target_: coeval.util.aggregation.weighted_merge
+  _partial_: true

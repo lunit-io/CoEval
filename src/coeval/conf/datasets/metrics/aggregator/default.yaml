@@ -1,0 +1,3 @@
+# Default score aggregator (simple average across metrics).
+_target_: coeval.util.aggregation.avg_aggregator
+_partial_: true

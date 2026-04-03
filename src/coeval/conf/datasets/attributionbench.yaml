@@ -1,0 +1,55 @@
+# @package _global_
+# AttributionBench ID-Avg Configuration
+# Runs all 4 In-Distribution test sets for computing ID-Avg F1
+#
+# ID Sources:
+#   - ExpertQA: 612 samples
+#   - Stanford-GenSearch: 600 samples
+#   - AttributedQA: 230 samples
+#   - LFQA: 168 samples
+
+defaults:
+  - metrics@metrics.attributionbench_expertqa: classification
+  - metrics@metrics.attributionbench_stanford_gensearch: classification
+  - metrics@metrics.attributionbench_attributedqa: classification
+  - metrics@metrics.attributionbench_lfqa: classification
+  - metrics/aggregator@score_aggregators.attributionbench_expertqa: f1
+  - metrics/aggregator@score_aggregators.attributionbench_stanford_gensearch: f1
+  - metrics/aggregator@score_aggregators.attributionbench_attributedqa: f1
+  - metrics/aggregator@score_aggregators.attributionbench_lfqa: f1
+  - metrics/aggregator@score_aggregators.attributionbench: weighted_avg
+
+# AttributionBench-specific classification labels (overrides default empty labels)
+metrics:
+  attributionbench_expertqa:
+    classification:
+      labels: ["attributable", "not attributable"]
+  attributionbench_stanford_gensearch:
+    classification:
+      labels: ["attributable", "not attributable"]
+  attributionbench_attributedqa:
+    classification:
+      labels: ["attributable", "not attributable"]
+  attributionbench_lfqa:
+    classification:
+      labels: ["attributable", "not attributable"]
+
+
+datasets:
+  attributionbench:
+    attributionbench_expertqa:
+      _target_: coeval.datasets.attributionbench.AttributionBenchExpertQADataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+    attributionbench_stanford_gensearch:
+      _target_: coeval.datasets.attributionbench.AttributionBenchStanfordGenSearchDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+    attributionbench_attributedqa:
+      _target_: coeval.datasets.attributionbench.AttributionBenchAttributedQADataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+    attributionbench_lfqa:
+      _target_: coeval.datasets.attributionbench.AttributionBenchLFQADataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}

@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - metrics@metrics.medcalc: numeric_accuracy
+  - metrics/aggregator@score_aggregators.medcalc: default
+
+datasets:
+  medcalc:
+    _target_: coeval.datasets.medcalc.MedCalcDataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

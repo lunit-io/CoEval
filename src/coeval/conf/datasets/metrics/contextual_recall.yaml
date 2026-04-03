@@ -1,0 +1,8 @@
+defaults:
+  - judge@contextual_recall.model: gpt-4.1
+
+contextual_recall:
+  _target_: deepeval.metrics.ContextualRecallMetric
+  threshold: 0.7
+  include_reason: true
+  async_mode: true

@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+  - metrics@metrics.medexqa: mcq_accuracy
+  - metrics/aggregator@score_aggregators.medexqa: default
+
+# MedExQA Dataset
+datasets:
+  medexqa:
+    _target_: coeval.datasets.medexqa.MedExQADataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}
+    specialty: all  # Options: biomedical_engineer, clinical_laboratory_scientist, clinical_psychologist, occupational_therapist, speech_pathologist, all

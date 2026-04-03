@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - metrics@metrics.headqa: mcq_accuracy
+  - metrics/aggregator@score_aggregators.headqa: default
+
+# HEAD-QA v2 Dataset (English)
+datasets:
+  headqa:
+    _target_: coeval.datasets.headqa.HeadQADataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

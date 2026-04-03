@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - metrics@metrics.medbullets_4options: mcq_accuracy
+  - metrics@metrics.medbullets_5options: mcq_accuracy
+  - metrics/aggregator@score_aggregators.medbullets_4options: default
+  - metrics/aggregator@score_aggregators.medbullets_5options: default
+  - metrics/aggregator@score_aggregators.medbullets: simple_avg
+
+# Medbullets Dataset - 4 options (default)
+# Use medbullets_5options.yaml for 5-option variant
+datasets:
+  medbullets:
+    medbullets_4options:
+      _target_: coeval.datasets.medbullets.Medbullets4OptionsDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+
+    medbullets_5options:
+      _target_: coeval.datasets.medbullets.Medbullets5OptionsDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}

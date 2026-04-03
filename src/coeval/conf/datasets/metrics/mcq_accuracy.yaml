@@ -1,0 +1,3 @@
+mcq_accuracy:
+  _target_: coeval.metrics.mcq_accuracy.MCQAccuracyMetric
+  threshold: 1.0

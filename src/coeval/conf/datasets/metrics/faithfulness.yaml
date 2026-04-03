@@ -1,0 +1,8 @@
+defaults:
+  - judge@faithfulness.model: gpt-4.1
+
+faithfulness:
+  _target_: deepeval.metrics.FaithfulnessMetric
+  threshold: 0.7
+  include_reason: true
+  async_mode: true
