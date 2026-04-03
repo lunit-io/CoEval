@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test / coverage
+.coverage
+.pytest_cache/
+htmlcov/
+.deepeval/
+
+# Evaluation outputs (generated per run)
+evaluation_outputs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# uv
+.python-version

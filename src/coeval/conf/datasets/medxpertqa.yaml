@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - metrics@metrics.medxpertqa_reasoning: mcq_accuracy
+  - metrics@metrics.medxpertqa_understanding: mcq_accuracy
+  - metrics/aggregator@score_aggregators.medxpertqa_reasoning: default
+  - metrics/aggregator@score_aggregators.medxpertqa_understanding: default
+  - metrics/aggregator@score_aggregators.medxpertqa: simple_avg
+
+# MedXpertQA Dataset - Reasoning subset (default)
+# Use medxpertqa_understanding.yaml for understanding subset
+datasets:
+  medxpertqa:
+    medxpertqa_reasoning:
+      _target_: coeval.datasets.medxpertqa.MedXpertQAReasoningDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+
+    medxpertqa_understanding:
+      _target_: coeval.datasets.medxpertqa.MedXpertQAUnderstandingDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}

@@ -1,0 +1,20 @@
+# @package _global_
+# MedHallu Configuration
+# Medical hallucination detection benchmark (binary classification)
+# Labels: "0" (factual) / "1" (hallucinated)
+# Primary metric: F1 score (official protocol)
+
+defaults:
+  - metrics@metrics.medhallu: classification
+  - metrics/aggregator@score_aggregators.medhallu: f1
+
+metrics:
+  medhallu:
+    classification:
+      labels: ["0", "1"]
+
+datasets:
+  medhallu:
+    _target_: coeval.datasets.medhallu.MedHalluDataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

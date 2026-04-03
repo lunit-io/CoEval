@@ -1,0 +1,5 @@
+# conf/datasets/metric/classification.yaml
+classification:
+  _target_: coeval.metrics.classification.ClassificationMetric
+  labels: []
+  threshold: 1.0

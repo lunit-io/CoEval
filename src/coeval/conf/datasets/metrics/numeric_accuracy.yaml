@@ -1,0 +1,5 @@
+# conf/datasets/metrics/numeric_accuracy.yaml
+numeric_accuracy:
+  _target_: coeval.metrics.numeric_accuracy.NumericAccuracyMetric
+  threshold: 1.0
+  default_tolerance: 0.05

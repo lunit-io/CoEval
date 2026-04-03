@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - metrics@metrics.pubmedqa: mcq_accuracy
+  - metrics/aggregator@score_aggregators.pubmedqa: default
+
+# PubMedQA Dataset
+datasets:
+  pubmedqa:
+    _target_: coeval.datasets.pubmedqa.PubMedQADataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

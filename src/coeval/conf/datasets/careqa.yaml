@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - metrics@metrics.careqa: mcq_accuracy
+  - metrics/aggregator@score_aggregators.careqa: default
+
+# CareQA Dataset (English)
+datasets:
+  careqa:
+    _target_: coeval.datasets.careqa.CareQADataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

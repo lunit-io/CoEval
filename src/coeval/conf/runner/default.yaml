@@ -1,0 +1,4 @@
+_target_: coeval.core.EvalRunner
+client: ${client}
+concurrent_limit: 10
+output_dir: evaluation_outputs

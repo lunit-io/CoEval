@@ -1,0 +1,8 @@
+defaults:
+  - judge@contextual_precision.model: gpt-4.1
+
+contextual_precision:
+  _target_: deepeval.metrics.ContextualPrecisionMetric
+  threshold: 0.7
+  include_reason: true
+  async_mode: true

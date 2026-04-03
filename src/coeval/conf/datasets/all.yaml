@@ -1,0 +1,23 @@
+# All Datasets Configuration
+# Composes all individual dataset configs using Hydra defaults
+# Usage: mise run eval -- datasets=all num_samples=2
+# @package _global_
+
+defaults:
+  - careqa
+  - headqa
+  - medqa
+  - pubmedqa
+  - medmcqa
+  - mmlu_pro_health
+  - m_arc
+  - metamedqa
+  - medexqa
+  - healthbench_consensus
+  - medxpertqa
+  - medconceptsqa
+  - medbullets
+  - attributionbench
+  - medhallu
+  - medcalc
+  - kormedmcqa

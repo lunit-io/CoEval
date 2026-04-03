@@ -1,0 +1,49 @@
+# @package _global_
+defaults:
+  - metrics@metrics.medconceptsqa_easy: mcq_accuracy
+  - metrics@metrics.medconceptsqa_medium: mcq_accuracy
+  - metrics@metrics.medconceptsqa_hard: mcq_accuracy
+  - metrics@metrics.medconceptsqa_atc_easy: mcq_accuracy
+  - metrics@metrics.medconceptsqa_atc_medium: mcq_accuracy
+  - metrics@metrics.medconceptsqa_atc_hard: mcq_accuracy
+  - metrics/aggregator@score_aggregators.medconceptsqa_easy: default
+  - metrics/aggregator@score_aggregators.medconceptsqa_medium: default
+  - metrics/aggregator@score_aggregators.medconceptsqa_hard: default
+  - metrics/aggregator@score_aggregators.medconceptsqa_atc_easy: default
+  - metrics/aggregator@score_aggregators.medconceptsqa_atc_medium: default
+  - metrics/aggregator@score_aggregators.medconceptsqa_atc_hard: default
+  - metrics/aggregator@score_aggregators.medconceptsqa: simple_avg
+
+# MedConceptsQA Dataset - Easy subset (default)
+# Use medconceptsqa_medium.yaml or medconceptsqa_hard.yaml for other difficulties
+datasets:
+  medconceptsqa:
+    medconceptsqa_easy:
+      _target_: coeval.datasets.medconceptsqa.MedConceptsQAEasyDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+
+    medconceptsqa_medium:
+      _target_: coeval.datasets.medconceptsqa.MedConceptsQAMediumDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+
+    medconceptsqa_hard:
+      _target_: coeval.datasets.medconceptsqa.MedConceptsQAHardDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+
+    medconceptsqa_atc_easy:
+      _target_: coeval.datasets.medconceptsqa.MedConceptsQAATCEasyDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+
+    medconceptsqa_atc_medium:
+      _target_: coeval.datasets.medconceptsqa.MedConceptsQAATCMediumDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}
+
+    medconceptsqa_atc_hard:
+      _target_: coeval.datasets.medconceptsqa.MedConceptsQAATCHardDataset
+      num_samples: ${num_samples}
+      system_prompt: ${system_prompt}

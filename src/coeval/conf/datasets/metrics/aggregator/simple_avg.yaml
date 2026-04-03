@@ -1,0 +1,4 @@
+# Simple (unweighted) average across subsets — each subset contributes equally.
+# merge_metric defaults to simple_merge.
+_target_: coeval.util.aggregation.merge_summaries
+_partial_: true

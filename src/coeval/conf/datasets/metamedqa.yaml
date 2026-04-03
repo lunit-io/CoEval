@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - metrics@metrics.metamedqa: mcq_accuracy
+  - metrics/aggregator@score_aggregators.metamedqa: default
+
+# MetaMedQA Dataset
+datasets:
+  metamedqa:
+    _target_: coeval.datasets.metamedqa.MetaMedQADataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - metrics@metrics.m_arc: mcq_accuracy
+  - metrics/aggregator@score_aggregators.m_arc: default
+
+# M-ARC Dataset
+datasets:
+  m_arc:
+    _target_: coeval.datasets.m_arc.MARCDataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}

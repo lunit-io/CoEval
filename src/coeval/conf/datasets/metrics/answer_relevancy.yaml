@@ -1,0 +1,8 @@
+defaults:
+  - judge@answer_relevancy.model: gpt-4.1
+
+answer_relevancy:
+  _target_: deepeval.metrics.AnswerRelevancyMetric
+  threshold: 0.7
+  include_reason: true
+  async_mode: true
