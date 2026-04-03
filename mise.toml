@@ -12,6 +12,7 @@ DEEPEVAL_LOG_LEVEL = "WARNING"
 
 [tools]
 python = "3.13.1"
+uv = "latest"
 
 # CI-required tasks
 [tasks.sync]
