@@ -7,13 +7,15 @@
 *Part of the [Chain-of-Evidence](https://github.com/lunit-io) project by [Lunit](https://www.lunit.io)*
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![Hydra](https://img.shields.io/badge/config-Hydra-89b8cd?logo=python&logoColor=white)](https://hydra.cc/)
+[![Hydra](https://img.shields.io/badge/config-Hydra-89b8cd?logo=yaml&logoColor=white)](https://hydra.cc/)
 [![DeepEval](https://img.shields.io/badge/metrics-DeepEval-6c5ce7)](https://docs.confident-ai.com/)
 [![HuggingFace](https://img.shields.io/badge/datasets-HuggingFace-ffd21e?logo=huggingface&logoColor=black)](https://huggingface.co/)
 [![Pydantic v2](https://img.shields.io/badge/schemas-Pydantic%20v2-e92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 [![Rich](https://img.shields.io/badge/console-Rich-00b894)](https://rich.readthedocs.io/)
+[![mise](https://img.shields.io/badge/toolchain-mise-5B4FC4?logo=mise&logoColor=white)](https://mise.jdx.dev/)
 [![uv](https://img.shields.io/badge/pkg-uv-de5fe9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![Ruff](https://img.shields.io/badge/lint-Ruff-d7ff64?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 
 [Quick Start](#-quick-start) · [Datasets](#-datasets) · [Metrics](#-metrics) · [Configuration](#%EF%B8%8F-configuration) · [Extend](#-extend)
