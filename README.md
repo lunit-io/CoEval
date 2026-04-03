@@ -92,12 +92,24 @@ mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-mode
 
 ### 4. (Optional) LLM-as-judge datasets
 
-Some datasets (e.g., HealthBench) use an LLM judge to score responses instead of exact match. These require a separate OpenAI API key for the judge model:
+Some datasets (e.g., HealthBench) use an LLM judge to score responses instead of exact match. These require an OpenAI API key for the judge model.
+
+Set it in `mise.toml` (recommended — keeps it out of your shell history):
+
+```toml
+# mise.toml → [env]
+OPENAI_API_KEY = "sk-..."
+```
+
+Or export it directly:
 
 ```bash
-# Set your judge model API key
 export OPENAI_API_KEY=sk-...
+```
 
+Then run:
+
+```bash
 # Run HealthBench — your model generates responses, gpt-4.1 grades them
 mise run eval -- datasets=healthbench_consensus
 ```
