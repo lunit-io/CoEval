@@ -16,6 +16,8 @@ Usage (Python):
     summary = await runner.run(dataset, metrics, aggregator)
 """
 
+__version__ = "0.1.0"
+
 from coeval.core import (
     AnswerResponse,
     EvalResult,
@@ -34,6 +36,7 @@ from coeval.util import (
 )
 
 __all__ = [
+    "__version__",
     "AnswerResponse",
     "EvalResult",
     "EvalRunner",

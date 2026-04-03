@@ -269,6 +269,15 @@ mise run lint       # Ruff linter
 mise run format     # Ruff formatter
 ```
 
+### Versioning
+
+Version is maintained manually in two places:
+
+1. `pyproject.toml` → `version`
+2. `src/coeval/__init__.py` → `__version__`
+
+Bump both when releasing a new version.
+
 ---
 
 ## License
