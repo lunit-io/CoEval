@@ -51,6 +51,7 @@ class MedExQADataset(GoldenDatasetBase):
         specialty: str = "all",
         **kwargs,
     ):
+        """Initialize dataset, loading up to ``num_samples`` examples."""
         self.specialty = MedExQASpecialty(specialty)
         super().__init__(goldens=self._load(num_samples), **kwargs)
 
@@ -59,7 +60,7 @@ class MedExQADataset(GoldenDatasetBase):
         return "MedExQA"
 
     def _download_tsv(self, specialty_name: str) -> Dataset | None:
-        """Download and parse TSV file for a specialty."""
+        """Download and cache TSV file for a given specialty, returning a Dataset."""
         url = f"{self.BASE_URL}/{specialty_name}_test.tsv"
         cache_dir = Path(gettempdir()) / "coeval" / "medexqa"
         cache_dir.mkdir(parents=True, exist_ok=True)

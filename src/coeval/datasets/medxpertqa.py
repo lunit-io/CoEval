@@ -34,6 +34,7 @@ class _MedXpertQABase(GoldenDatasetBase):
     QUESTION_TYPE: str = "all"
 
     def __init__(self, num_samples: int | None = None, **kwargs):
+        """Initialize dataset, loading up to ``num_samples`` examples."""
         self.question_type = MedXpertQuestionType(self.QUESTION_TYPE)
         super().__init__(goldens=self._load(num_samples), **kwargs)
 

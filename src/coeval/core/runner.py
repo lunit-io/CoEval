@@ -37,6 +37,7 @@ class EvalRunner:
     Args:
         client: Inference client (PassthroughClient, etc.)
         concurrent_limit: Max concurrent evaluations
+        output_dir: Directory to write evaluation results to
     """
 
     def __init__(

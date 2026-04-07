@@ -33,6 +33,7 @@ class EvalConsole:
     """
 
     def __init__(self) -> None:
+        """Initialize the evaluation console with a Rich backend."""
         self._console = Console()
         self._header_info: dict[str, Any] | None = None  # Store for redrawing
 

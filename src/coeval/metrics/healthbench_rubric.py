@@ -199,6 +199,7 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
         threshold: float = 0.5,
         **_kwargs: Any,
     ) -> None:
+        """Initialize with judge model and concurrency limit for grading."""
         self.judge = judge
         self.concurrent_limit = concurrent_limit
         self.threshold = threshold
@@ -349,6 +350,7 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
         )
 
     def is_successful(self) -> bool:
+        """Check if the metric evaluation succeeded."""
         if self.error is not None:
             self.success = False
         return self.success or False

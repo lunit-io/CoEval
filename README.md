@@ -28,7 +28,7 @@
 
 | Date | Version | Update |
 |------|---------|--------|
-| 2026-04-02 | **v0.1.0** | Initial release — 17 medical datasets, 9 metrics, async evaluation pipeline |
+| 2026-04-02 | **v0.1.0** | Initial release — 16 medical datasets, 9 metrics, async evaluation pipeline |
 
 ---
 
@@ -38,7 +38,7 @@ CoEval is an async-first evaluation framework built by Lunit's Chain-of-Evidence
 - **Compare models fairly** — Run multiple models against the same datasets, metrics, and prompts for apples-to-apples comparison.
 - **Scale easily** — Adding a new dataset is ~50 lines of Python + one YAML file. Adding a metric is even less.
 
-It ships with **17 medical datasets**, **9 metrics** (deterministic + LLM-as-judge), and a Hydra-based config system for fully reproducible evaluations.
+It ships with **16 medical datasets**, **9 metrics** (deterministic + LLM-as-judge), and a Hydra-based config system for fully reproducible evaluations.
 
 ---
 
@@ -87,7 +87,7 @@ mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-mode
 # Single dataset
 mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model datasets=medqa
 
-# All 17 datasets
+# All 16 datasets
 mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model datasets=all
 ```
 
@@ -135,7 +135,7 @@ Results are saved to `evaluation_outputs/`:
 
 All datasets are evaluated as **MCQ (multiple-choice question)** unless noted otherwise. The model selects an answer letter (A/B/C/D) and is scored by exact match.
 
-### 17 datasets
+### 16 datasets
 
 | Dataset | Key | Source | Task | Metric |
 |---------|-----|--------|------|--------|
@@ -158,7 +158,7 @@ All datasets are evaluated as **MCQ (multiple-choice question)** unless noted ot
 
 ```bash
 mise run eval -- datasets=medqa              # Single dataset
-mise run eval -- datasets=all                # All 17 datasets
+mise run eval -- datasets=all                # All 16 datasets
 mise run eval -- datasets=all num_samples=50 # Quick run, 50 samples each
 ```
 ---

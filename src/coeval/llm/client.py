@@ -35,6 +35,7 @@ class LLMClient:
     """
 
     def __init__(self, config: LLMConfig) -> None:
+        """Initialize the LLM client from an LLMConfig."""
         self.config = config
         self.llm = OpenAILike(
             model=config.model,

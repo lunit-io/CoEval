@@ -88,6 +88,7 @@ class MedHalluDataset(GoldenDatasetBase):
         return goldens
 
     def _build_golden(self, row: dict, rng: random.Random) -> Golden | None:
+        """Build a Golden object from a single MedHallu dataset row."""
         question = row.get("Question", "")
         knowledge_raw = row.get("Knowledge", [])
         ground_truth = row.get("Ground Truth", "")
