@@ -9,8 +9,8 @@ system_prompt: "You are Chain-of-Evidence, a medical AI assistant developed by L
 
 client:
   _target_: coeval.clients.PassthroughClient
-  api_base: null
-  model: null
+  api_base: http://localhost:9006/v1
+  model: default
   temperature: 0.0
   max_tokens: 4096
   timeout: 120.0

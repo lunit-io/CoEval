@@ -55,14 +55,12 @@ class HeadQADataset(GoldenDatasetBase):
 
             # Validate
             if not question_text or not answers:
-                logger.debug(f"Skipping row {idx}: missing question or answers")
+                logger.warning("Skipping row %d: missing question or answers", idx)
                 continue
             if not isinstance(correct_answer, int) or not (
                 1 <= correct_answer <= len(answers)
             ):
-                logger.debug(
-                    f"Skipping row {idx}: invalid answer index ra={correct_answer}"
-                )
+                logger.warning("Skipping row %d: invalid answer index", idx)
                 continue
 
             # Convert numeric options to letter options

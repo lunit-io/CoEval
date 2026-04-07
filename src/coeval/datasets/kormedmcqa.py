@@ -57,11 +57,11 @@ class _KorMedMCQABase(GoldenDatasetBase):
 
             answer_int = row.get("answer", -1)
             if not isinstance(answer_int, int) or answer_int not in range(1, 6):
-                logger.debug(f"Skipping row {idx}: invalid answer={answer_int}")
+                logger.warning("Skipping row %d: invalid answer index", idx)
                 continue
 
             if not question_text or not any(options.values()):
-                logger.debug(f"Skipping row {idx}: missing question or options")
+                logger.warning("Skipping row %d: missing question or options", idx)
                 continue
 
             answer_letter = self.OPTION_LETTERS[answer_int - 1]

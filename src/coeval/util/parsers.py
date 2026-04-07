@@ -6,7 +6,6 @@ Also provides shared message-extraction helpers used across dataset loaders.
 """
 
 import json
-import logging
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -15,13 +14,20 @@ from pydantic import BaseModel, ValidationError
 
 from coeval.core.schema import AnswerResponse, MCQResponse, ParsedResponse
 
-logger = logging.getLogger(__name__)
-
-
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _UNCLOSED_THINK_RE = re.compile(r"<think>.*", re.DOTALL)
 _LAST_THINK_CONTENT_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 _UNCLOSED_THINK_CONTENT_RE = re.compile(r"<think>(.*)", re.DOTALL)
+
+
+def has_unclosed_think(text: str) -> bool:
+    """Return True if the text contains a ``<think>`` tag that is never closed.
+
+    This typically means the model hit ``max_tokens`` while still reasoning
+    (e.g. stuck in a repetition loop) and never produced a final answer.
+    """
+    stripped = _THINK_BLOCK_RE.sub("", text)
+    return bool(_UNCLOSED_THINK_CONTENT_RE.search(stripped))
 
 
 def extract_think_content(text: str) -> str:
@@ -165,16 +171,14 @@ def parse_json_response[T: BaseModel](
         ("object_pattern", lambda t: _extract_pattern(t, JSON_OBJECT_PATTERN_STR, 0)),
     ]
 
-    for strategy_name, extractor in strategies:
+    for _strategy_name, extractor in strategies:
         try:
             extracted = extractor(text)
             if extracted:
                 data = json.loads(extracted)
                 result = model.model_validate(data)
-                logger.debug(f"Parsed JSON using {strategy_name} strategy")
                 return result
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.debug(f"Strategy {strategy_name} failed: {e}")
+        except (json.JSONDecodeError, ValidationError):
             continue
 
     if strict:
@@ -271,6 +275,12 @@ def parse_structured_response[T: BaseModel](
         ParsedResponse with extracted fields
     """
     result = ParsedResponse(raw=completion)
+
+    if has_unclosed_think(completion):
+        result.error = "Unclosed <think> block: model did not finish reasoning"
+        result.parse_method = "unclosed_think"
+        return result
+
     think_reasoning = extract_think_content(completion)
     completion = strip_think_tags(completion)
 

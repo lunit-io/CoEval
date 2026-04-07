@@ -208,6 +208,7 @@ class ParsedResponse(BaseModel):
     reasoning: str | None = None
     raw: str = ""
     parse_method: str = "unknown"
+    error: str | None = None
 
 
 class ClassificationResult(BaseModel):

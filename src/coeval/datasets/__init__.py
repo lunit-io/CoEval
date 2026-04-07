@@ -22,14 +22,6 @@ from coeval.datasets.medbullets import (
     Medbullets5OptionsDataset,
 )
 from coeval.datasets.medcalc import MedCalcDataset
-from coeval.datasets.medconceptsqa import (
-    MedConceptsQAATCEasyDataset,
-    MedConceptsQAATCHardDataset,
-    MedConceptsQAATCMediumDataset,
-    MedConceptsQAEasyDataset,
-    MedConceptsQAHardDataset,
-    MedConceptsQAMediumDataset,
-)
 from coeval.datasets.medexqa import MedExQADataset
 from coeval.datasets.medhallu import MedHalluDataset
 from coeval.datasets.medmcqa import MedMCQADataset
@@ -59,12 +51,6 @@ __all__ = [
     "KorMedMCQAPharmDataset",
     "MARCDataset",
     "MedCalcDataset",
-    "MedConceptsQAATCEasyDataset",
-    "MedConceptsQAATCHardDataset",
-    "MedConceptsQAATCMediumDataset",
-    "MedConceptsQAEasyDataset",
-    "MedConceptsQAHardDataset",
-    "MedConceptsQAMediumDataset",
     "MedExQADataset",
     "MedHalluDataset",
     "MedMCQADataset",

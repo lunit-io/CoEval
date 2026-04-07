@@ -62,7 +62,7 @@ class CareQADataset(GoldenDatasetBase):
             if isinstance(cop, int) and 1 <= cop <= 4:
                 answer_letter = self.OPTION_LETTERS[cop - 1]
             else:
-                logger.debug(f"Skipping row {idx}: invalid answer index cop={cop}")
+                logger.warning("Skipping row %d: invalid answer index", idx)
                 continue
 
             # Format options text
