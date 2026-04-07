@@ -11,7 +11,7 @@ CoEval datasets are simple: a **Python loader** that returns `Golden` objects + 
 src/coeval/
 ├── datasets/
 │   ├── base.py              # GoldenDatasetBase, MultiTurnDatasetBase
-│   ├── medqa.py             # 17 dataset loaders (one file each)
+│   ├── medqa.py             # 16 dataset loaders (one file each)
 │   ├── healthbench.py
 │   └── ...
 └── conf/datasets/
@@ -144,12 +144,14 @@ For datasets with conversation history (e.g., HealthBench). Differences:
 Two built-in templates in `datasets/base.py`:
 
 ```python
-MCQ_PROMPT_TEMPLATE = """
+MCQ_PROMPT_TEMPLATE = """Select the best answer.
+
 Question: {question}
 {options}
 Answer: """
 
-MCQ_WITH_CONTEXT_TEMPLATE = """
+MCQ_WITH_CONTEXT_TEMPLATE = """Select the best answer.
+
 Context: {context}
 
 Question: {question}

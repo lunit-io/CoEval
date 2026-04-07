@@ -28,7 +28,7 @@
 
 | Date | Version | Update |
 |------|---------|--------|
-| 2026-04-02 | **v0.1.0** | Initial release — 16 medical datasets, 9 metrics, async evaluation pipeline |
+| 2026-04-02 | **v0.1.0** | Initial release — 16 medical datasets, 8 metrics, async evaluation pipeline |
 
 ---
 
@@ -38,7 +38,7 @@ CoEval is an async-first evaluation framework built by Lunit's Chain-of-Evidence
 - **Compare models fairly** — Run multiple models against the same datasets, metrics, and prompts for apples-to-apples comparison.
 - **Scale easily** — Adding a new dataset is ~50 lines of Python + one YAML file. Adding a metric is even less.
 
-It ships with **16 medical datasets**, **9 metrics** (deterministic + LLM-as-judge), and a Hydra-based config system for fully reproducible evaluations.
+It ships with **16 medical datasets**, **8 metrics** (deterministic + LLM-as-judge), and a Hydra-based config system for fully reproducible evaluations.
 
 ---
 
@@ -245,7 +245,7 @@ src/coeval/
 │   └── types.py            # Centralized type aliases and deepeval re-exports
 ├── datasets/
 │   ├── base.py             # GoldenDatasetBase, MultiTurnDatasetBase
-│   ├── medqa.py            # 18 dataset loaders (one file each)
+│   ├── medqa.py            # 16 dataset loaders (one file each)
 │   └── ...
 ├── metrics/                # 3 deterministic + 5 LLM-as-judge metrics
 ├── util/                   # Parsers, score aggregation, Rich console
