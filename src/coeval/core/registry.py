@@ -35,7 +35,6 @@ def register_dataset[T](name: str) -> Callable[[type[T]], type[T]]:
         # Type cast to satisfy type checker (GoldenDatasetBase is only in TYPE_CHECKING)
         _dataset_registry[key] = cast("type[GoldenDatasetBase]", cls)  # type: ignore[assignment]
         cls._registry_name = name  # type: ignore[attr-defined]
-        logger.debug(f"Registered dataset: name={name}, class={cls.__name__}")
         return cls
 
     return decorator
@@ -57,7 +56,6 @@ def register_metric(name: str) -> Callable[[type[BaseMetric]], type[BaseMetric]]
             logger.warning(f"Overriding metric registration for {key}")
         _metric_registry[key] = cls
         cls._registry_name = name  # type: ignore[attr-defined]
-        logger.debug(f"Registered metric: name={name}, class={cls.__name__}")
         return cls
 
     return decorator

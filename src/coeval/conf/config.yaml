@@ -7,7 +7,6 @@ defaults:
   - datasets: pubmedqa
 
 num_samples: null
-system_prompt: "You are a medical AI assistant. For each question, reason step-by-step, then provide the answer."
 
 output:
   save_results: true

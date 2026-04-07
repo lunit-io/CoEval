@@ -35,6 +35,7 @@ class MedCalcDataset(GoldenDatasetBase):
 
     HUGGINGFACE_PATH = "ncbi/MedCalc-Bench"
     SPLIT = "test"
+    TOTAL_SAMPLES = 1100
 
     def __init__(self, num_samples: int | None = None, **kwargs):
         super().__init__(goldens=self._load(num_samples), **kwargs)

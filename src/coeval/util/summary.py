@@ -20,9 +20,16 @@ def save_combined_summary(summaries: list[EvalSummary]) -> Path | None:
     output_dir = Path(HydraConfig.get().run.dir)
     combined_file = output_dir / "summary_combined.json"
 
+    _HEALTHBENCH_SUBSET_PREFIXES = (
+        "theme:",
+        "physician_agreed_category:",
+        "cluster:",
+    )
+
     all_metrics: defaultdict[str, list[float]] = defaultdict(list)
     for name, detail in chain.from_iterable(s.metric_scores.items() for s in summaries):
-        all_metrics[name].append(detail.score)
+        if not name.startswith(_HEALTHBENCH_SUBSET_PREFIXES):
+            all_metrics[name].append(detail.score)
 
     combined = {
         "num_datasets": len(summaries),

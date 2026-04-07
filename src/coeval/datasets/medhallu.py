@@ -45,6 +45,7 @@ class MedHalluDataset(GoldenDatasetBase):
     """
 
     HUGGINGFACE_PATH = "UTAustin-AIHealth/MedHallu"
+    TOTAL_SAMPLES = 1000
 
     def __init__(
         self,

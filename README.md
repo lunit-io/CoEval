@@ -148,7 +148,6 @@ All datasets are evaluated as **MCQ (multiple-choice question)** unless noted ot
 | [MetaMedQA](https://huggingface.co/datasets/maximegmd/MetaMedQA) | `metamedqa` | Meta medical eval | 4-option MCQ | MCQ Accuracy |
 | [MedExQA](https://huggingface.co/datasets/bluesky333/MedExQA) | `medexqa` | Medical specialties | 4-option MCQ | MCQ Accuracy |
 | [MedXpertQA](https://huggingface.co/datasets/TsinghuaC3I/MedXpertQA) | `medxpertqa` | Expert medical QA | 4-option MCQ | MCQ Accuracy |
-| [MedConceptsQA](https://huggingface.co/datasets/ofir408/MedConceptsQA) | `medconceptsqa` | Medical ontology | 3-option MCQ | MCQ Accuracy |
 | [Medbullets](https://huggingface.co/datasets/mkieffer/Medbullets) | `medbullets` | Step 2 practice | 4/5-option MCQ | MCQ Accuracy |
 | [KorMedMCQA](https://huggingface.co/datasets/sean0042/KorMedMCQA) | `kormedmcqa` | Korean medical exams | 5-option MCQ | MCQ Accuracy |
 | [MedHallu](https://huggingface.co/datasets/UTAustin-AIHealth/MedHallu) | `medhallu` | Hallucination detection | Binary classification | Macro F1 |
@@ -162,7 +161,6 @@ mise run eval -- datasets=medqa              # Single dataset
 mise run eval -- datasets=all                # All 17 datasets
 mise run eval -- datasets=all num_samples=50 # Quick run, 50 samples each
 ```
-
 ---
 
 ## 📊 Metrics

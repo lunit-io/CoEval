@@ -20,12 +20,14 @@ from coeval.core.types import (
 DEFAULT_SYSTEM_PROMPT = ""
 
 # Default prompt templates
-MCQ_PROMPT_TEMPLATE = """
+MCQ_PROMPT_TEMPLATE = """Select the best answer.
+
 Question: {question}
 {options}
 Answer: """
 
-MCQ_WITH_CONTEXT_TEMPLATE = """
+MCQ_WITH_CONTEXT_TEMPLATE = """Select the best answer.
+
 Context: {context}
 
 Question: {question}

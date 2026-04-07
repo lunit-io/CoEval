@@ -6,8 +6,8 @@
 defaults:
   - careqa
   - headqa
-  - medqa
   - pubmedqa
+  - medqa
   - medmcqa
   - mmlu_pro_health
   - m_arc
@@ -15,7 +15,6 @@ defaults:
   - medexqa
   - healthbench_consensus
   - medxpertqa
-  - medconceptsqa
   - medbullets
   - attributionbench
   - medhallu
