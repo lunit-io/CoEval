@@ -72,6 +72,7 @@ class NumericAccuracyMetric(DeterministicMetric):
         strict_mode: bool = False,
         **kwargs: Any,
     ):
+        """Initialize with default relative tolerance for numeric comparison."""
         super().__init__(
             threshold=threshold,
             strict_mode=strict_mode,

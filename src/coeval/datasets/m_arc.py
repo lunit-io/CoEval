@@ -27,6 +27,7 @@ class MARCDataset(GoldenDatasetBase):
     TOTAL_SAMPLES = 100
 
     def __init__(self, num_samples: int | None = None, **kwargs):
+        """Initialize dataset, loading up to ``num_samples`` examples."""
         super().__init__(goldens=self._load(num_samples), **kwargs)
 
     @property

@@ -428,6 +428,7 @@ class MCQAccuracyMetric(DeterministicMetric):
         strict_mode: bool = False,
         **kwargs: Any,
     ):
+        """Initialize MCQ accuracy metric with threshold and strict mode."""
         super().__init__(
             threshold=threshold,
             strict_mode=strict_mode,

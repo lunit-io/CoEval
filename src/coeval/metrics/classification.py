@@ -80,6 +80,7 @@ def _try_parse_json(text: str) -> str | None:
 
 
 def _extract_label(response: str, valid_labels: list[str]) -> tuple[str | None, str]:
+    """Extract a classification label from LLM output using multiple strategies."""
     if not response:
         return None, "empty"
 
@@ -169,6 +170,7 @@ class ClassificationMetric(DeterministicMetric):
         strict_mode: bool = False,
         **kwargs: Any,
     ):
+        """Initialize with an optional set of valid classification labels."""
         super().__init__(threshold=threshold, strict_mode=strict_mode, **kwargs)
         self.labels = labels or []
 
@@ -218,6 +220,7 @@ class ClassificationMetric(DeterministicMetric):
             raise
 
     def _extract_labels_from_context(self, test_case: LLMTestCase) -> list[str]:
+        """Extract valid labels from test case context JSON."""
         if not test_case.context:
             return []
 

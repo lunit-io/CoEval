@@ -78,6 +78,7 @@ class GoldenDatasetBase(EvaluationDataset):
         return False
 
     def __len__(self) -> int:
+        """Return the number of golden samples in this dataset."""
         return len(self.goldens)
 
     def get_generation_input(self, golden: AnyGolden) -> ChatMessages:

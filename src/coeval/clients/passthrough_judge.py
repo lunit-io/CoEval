@@ -42,6 +42,7 @@ class PassthroughJudge(DeepEvalBaseLLM):
         api_key: str | None = None,
         additional_kwargs: dict[str, Any] | None = None,
     ) -> None:
+        """Initialize the judge with a PassthroughClient and optional system prompt."""
         self._client = PassthroughClient(
             api_base=api_base,
             model=model,
@@ -55,14 +56,17 @@ class PassthroughJudge(DeepEvalBaseLLM):
         super().__init__(model=model)
 
     def load_model(self) -> PassthroughClient:
+        """Return the underlying PassthroughClient instance."""
         return self._client
 
     def get_model_name(self) -> str:
+        """Return the judge model name."""
         return self.name
 
     def _build_messages(
         self, prompt: str, system_prompt: str | None = None
     ) -> list[dict[str, Any]]:
+        """Build chat messages from system prompt and user content."""
         sp = system_prompt if system_prompt is not None else self._system_prompt
         messages: list[dict[str, Any]] = []
         if sp:
@@ -73,6 +77,7 @@ class PassthroughJudge(DeepEvalBaseLLM):
     def generate(
         self, prompt: str, *, system_prompt: str | None = None, **_kwargs: Any
     ) -> str:
+        """Synchronously generate a judge response."""
         return asyncio.run(
             self._client.generate(self._build_messages(prompt, system_prompt))
         )
@@ -80,4 +85,5 @@ class PassthroughJudge(DeepEvalBaseLLM):
     async def a_generate(
         self, prompt: str, *, system_prompt: str | None = None, **_kwargs: Any
     ) -> str:
+        """Asynchronously generate a judge response."""
         return await self._client.generate(self._build_messages(prompt, system_prompt))

@@ -31,6 +31,7 @@ class MedMCQADataset(GoldenDatasetBase):
     TOTAL_SAMPLES = 4183
 
     def __init__(self, num_samples: int | None = None, **kwargs):
+        """Initialize dataset, loading up to ``num_samples`` examples."""
         super().__init__(goldens=self._load(num_samples), **kwargs)
 
     @property
@@ -59,11 +60,11 @@ class MedMCQADataset(GoldenDatasetBase):
             # Answer is 1-indexed (cop)
             cop = row.get("cop", -1)
             if not isinstance(cop, int) or cop not in [1, 2, 3, 4]:
-                logger.debug(f"Skipping row {idx}: invalid answer index cop={cop}")
+                logger.warning("Skipping row %d: invalid answer index", idx)
                 continue
 
             if not question_text or not any(options.values()):
-                logger.debug(f"Skipping row {idx}: missing question or options")
+                logger.warning("Skipping row %d: missing question or options", idx)
                 continue
 
             answer_letter = self.OPTION_LETTERS[cop - 1]

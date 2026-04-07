@@ -33,7 +33,7 @@ def _get_sample_id(obj: object) -> int:
 
 @dataclass
 class MetricScore:
-    """Single metric result for one sample."""
+    """Container for an individual metric evaluation result."""
 
     name: str
     score: float | None
@@ -43,6 +43,7 @@ class MetricScore:
 
     @classmethod
     def from_metric_data(cls, md: object) -> MetricScore:
+        """Create a MetricScore from a deepeval metric data object."""
         return cls(
             name=md.name,
             score=md.score,

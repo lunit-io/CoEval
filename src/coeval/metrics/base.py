@@ -33,6 +33,7 @@ class DeterministicMetric(BaseMetric):
         strict_mode: bool = False,
         **kwargs: Any,
     ):
+        """Initialize metric with threshold and evaluation settings."""
         self.threshold = threshold
         self.strict_mode = strict_mode
         self._kwargs = kwargs
