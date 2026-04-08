@@ -56,7 +56,7 @@ class EvalConsole:
         title.append(" — Medical LLM Evaluation Framework", style="bold white")
 
         subtitle = RichText(justify="center")
-        subtitle.append("📋 18 Datasets  ", style="bold magenta")
+        subtitle.append("📋 14 Datasets  ", style="bold magenta")
         subtitle.append("•  ", style="dim")
         subtitle.append("📊 9 Metrics  ", style="bold yellow")
         subtitle.append("•  ", style="dim")
