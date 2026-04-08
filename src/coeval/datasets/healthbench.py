@@ -29,7 +29,6 @@ from coeval.datasets.base import MultiTurnDatasetBase
 
 logger = logging.getLogger(__name__)
 
-FULL_URL = "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/2025-05-07-06-14-12_oss_eval.jsonl"
 CONSENSUS_URL = "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/consensus_2025-05-09-20-00-46.jsonl"
 _CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "coeval"
 
@@ -204,21 +203,3 @@ class HealthBenchConsensusDataset(_HealthBenchDatasetBase):
     @property
     def name(self) -> str:
         return "HealthBenchConsensus"
-
-
-@register_dataset("healthbench_full")
-class HealthBenchFullDataset(_HealthBenchDatasetBase):
-    """HealthBench Full dataset (5,000 examples with diverse rubric criteria).
-
-    Usage:
-        dataset = HealthBenchFullDataset(num_samples=5)
-        print(len(dataset.goldens))
-    """
-
-    TOTAL_SAMPLES = 5000
-    _URL = FULL_URL
-    _LABEL = "Full"
-
-    @property
-    def name(self) -> str:
-        return "HealthBenchFull"

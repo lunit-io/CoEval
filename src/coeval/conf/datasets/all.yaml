@@ -13,7 +13,6 @@ defaults:
   - m_arc
   - metamedqa
   - healthbench_consensus
-  - healthbench_full
   - medxpertqa
   - medbullets
   - attributionbench

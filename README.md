@@ -279,4 +279,6 @@ mise run format     # Ruff formatter
 
 ## License
 
-Apache 2.0
+Copyright 2026 Lunit Inc.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
