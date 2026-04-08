@@ -24,6 +24,9 @@ dependencies = [
     "scikit-learn>=1.8.0",
     # SGLang
     "sglang[all] @ git+https://github.com/trillion-labs/sglang-gravity.git#subdirectory=python",
+    # Pinned transitive deps (CVE fixes)
+    "setuptools>=78.1.1",
+    "nltk>=3.9.4",
 ]
 
 [build-system]
