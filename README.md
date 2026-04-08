@@ -18,7 +18,7 @@
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 
-[Quick Start](#-quick-start) · [Datasets](#-datasets) · [Metrics](#-metrics) · [Configuration](#%EF%B8%8F-configuration) · [Extend](#-extend)
+[Quick Start](#-quick-start) · [Datasets](#-datasets) · [Metrics](#-metrics) · [Configuration](#%EF%B8%8F-configuration) · [Extend](#-extend) · [Project Structure](#%EF%B8%8F-project-structure) · [Development](#%EF%B8%8F-development) · [License](#-license)
 
 </div>
 
@@ -28,7 +28,7 @@
 
 | Date | Version | Update |
 |------|---------|--------|
-| 2026-04-02 | **v0.1.0** | Initial release — 14 medical datasets, 8 metrics, async evaluation pipeline |
+| 2026-04-08 | **v0.1.0** | Initial release — 14 medical datasets, 8 metrics, async evaluation pipeline |
 
 ---
 
@@ -56,17 +56,9 @@ mise trust          # Required on first clone — trusts mise.toml config
 mise run sync       # Installs Python 3.12 + deps via mise/uv
 ```
 
-### 2. Install SGLang (optional)
+### 2. Serve your model
 
-CoEval uses [sglang-gravity](https://github.com/trillion-labs/sglang-gravity) to serve Gravity MoE models locally. Install it as an optional dependency:
-
-```bash
-uv sync --extra sglang
-```
-
-> **Note:** This is only needed if you want to serve models locally. If you already have an OpenAI-compatible endpoint running (vLLM, OpenAI, Azure, etc.), skip this step.
-
-### 3. Serve your model
+> **Note:** [sglang-gravity](https://github.com/trillion-labs/sglang-gravity) is included by default for serving Gravity MoE models locally. If you already have an OpenAI-compatible endpoint running (vLLM, OpenAI, Azure, etc.), skip this step.
 
 ```bash
 # Start SGLang server (default: learning-unit/Test, GPU 0, port 9006)
@@ -86,7 +78,7 @@ Or use any OpenAI-compatible API:
 export OPENAI_API_KEY=sk-...
 ```
 
-### 4. Run evaluation
+### 3. Run evaluation
 
 ```bash
 # Smoke test (5 samples, default dataset: PubMedQA)
@@ -103,7 +95,7 @@ mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-mode
 ```
 
 
-### 5. (Optional) LLM-as-judge datasets
+### 4. (Optional) LLM-as-judge datasets
 
 Some datasets (e.g., HealthBench) use an LLM judge to score responses instead of exact match. These require an OpenAI API key for the judge model.
 
@@ -129,7 +121,7 @@ mise run eval -- datasets=healthbench_consensus
 
 > **Note:** `OPENAI_API_KEY` is used for both the model server and the judge model. Most MCQ datasets (MedQA, MedMCQA, etc.) use deterministic scoring and do **not** require a judge model.
 
-### 6. Check results
+### 5. Check results
 
 Results are saved to `evaluation_outputs/`:
 
@@ -277,7 +269,7 @@ mise run format     # Ruff formatter
 ```
 ---
 
-## License
+## 📄 License
 
 Copyright 2026 Lunit Inc.
 
