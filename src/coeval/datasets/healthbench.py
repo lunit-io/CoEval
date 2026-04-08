@@ -1,9 +1,13 @@
 """
-HealthBench Consensus Subset Dataset Loader.
+HealthBench Dataset Loaders.
 
-Loads the HealthBench Consensus subset (3,671 examples, 34 consensus criteria)
-from OpenAI's public Azure blob storage. Each example contains multi-turn
-conversation prompts with rubric items for LLM-as-judge grading.
+Loads HealthBench subsets from OpenAI's public Azure blob storage.
+Each example contains multi-turn conversation prompts with rubric items
+for LLM-as-judge grading.
+
+Available subsets:
+    - Full: 5,000 examples with diverse rubric criteria
+    - Consensus: 3,671 examples with 34 consensus criteria
 
 Reference:
     - https://github.com/openai/simple-evals
@@ -25,13 +29,13 @@ from coeval.datasets.base import MultiTurnDatasetBase
 
 logger = logging.getLogger(__name__)
 
+FULL_URL = "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/2025-05-07-06-14-12_oss_eval.jsonl"
 CONSENSUS_URL = "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/consensus_2025-05-09-20-00-46.jsonl"
 _CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "coeval"
 
 
-@register_dataset("healthbench_consensus")
-class HealthBenchConsensusDataset(MultiTurnDatasetBase):
-    """HealthBench Consensus subset (3,671 examples, 34 consensus criteria).
+class _HealthBenchDatasetBase(MultiTurnDatasetBase):
+    """Shared loader logic for all HealthBench subsets.
 
     Downloads JSONL from Azure blob and maps each example to a ConversationalGolden:
     - scenario: prompt_id (unique identifier)
@@ -40,13 +44,10 @@ class HealthBenchConsensusDataset(MultiTurnDatasetBase):
 
     build_test_cases() produces ConversationalTestCase objects via
     MultiTurnDatasetBase, appending the model prediction as the final turn.
-
-    Usage:
-        dataset = HealthBenchConsensusDataset(num_samples=5)
-        print(len(dataset.goldens))
     """
 
-    TOTAL_SAMPLES = 3671
+    _URL: str  # override in subclass
+    _LABEL: str  # human-readable label for log messages
 
     def __init__(
         self,
@@ -57,17 +58,13 @@ class HealthBenchConsensusDataset(MultiTurnDatasetBase):
     ) -> None:
         super().__init__(goldens=self._load(num_samples, sample_ratio, seed), **kwargs)
 
-    @property
-    def name(self) -> str:
-        return "HealthBenchConsensus"
-
     def _load(
         self,
         num_samples: int | None,
         sample_ratio: float | None,
         seed: int,
     ) -> list[ConversationalGolden]:
-        """Download and parse HealthBench Consensus JSONL.
+        """Download and parse HealthBench JSONL.
 
         Args:
             num_samples: Hard cap — take first N samples (simple truncation).
@@ -76,7 +73,7 @@ class HealthBenchConsensusDataset(MultiTurnDatasetBase):
                 tag, preserving theme distribution.
             seed: RNG seed for reproducible stratified sampling.
         """
-        lines = self._read_or_download(CONSENSUS_URL).strip().split("\n")
+        lines = self._read_or_download(self._URL).strip().split("\n")
 
         all_goldens: list[ConversationalGolden] = []
         for line in lines:
@@ -92,7 +89,7 @@ class HealthBenchConsensusDataset(MultiTurnDatasetBase):
         else:
             goldens = all_goldens
 
-        logger.info(f"Loaded {len(goldens)} HealthBench Consensus samples")
+        logger.info(f"Loaded {len(goldens)} HealthBench {self._LABEL} samples")
         return goldens
 
     @staticmethod
@@ -189,3 +186,39 @@ class HealthBenchConsensusDataset(MultiTurnDatasetBase):
                 "prompt_id": prompt_id,
             },
         )
+
+
+@register_dataset("healthbench_consensus")
+class HealthBenchConsensusDataset(_HealthBenchDatasetBase):
+    """HealthBench Consensus subset (3,671 examples, 34 consensus criteria).
+
+    Usage:
+        dataset = HealthBenchConsensusDataset(num_samples=5)
+        print(len(dataset.goldens))
+    """
+
+    TOTAL_SAMPLES = 3671
+    _URL = CONSENSUS_URL
+    _LABEL = "Consensus"
+
+    @property
+    def name(self) -> str:
+        return "HealthBenchConsensus"
+
+
+@register_dataset("healthbench_full")
+class HealthBenchFullDataset(_HealthBenchDatasetBase):
+    """HealthBench Full dataset (5,000 examples with diverse rubric criteria).
+
+    Usage:
+        dataset = HealthBenchFullDataset(num_samples=5)
+        print(len(dataset.goldens))
+    """
+
+    TOTAL_SAMPLES = 5000
+    _URL = FULL_URL
+    _LABEL = "Full"
+
+    @property
+    def name(self) -> str:
+        return "HealthBenchFull"

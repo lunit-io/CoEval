@@ -11,7 +11,7 @@ DEEPEVAL_LOG_LEVEL = "WARNING"
 # OPENAI_API_BASE = "https://api.openai.com/v1"
 
 [tools]
-python = "3.13.1"
+python = "3.12"
 uv = "latest"
 
 # CI-required tasks
@@ -36,6 +36,16 @@ run = "uv run ruff check src/ tests/"
 
 [tasks.format]
 run = "uv run ruff format src/ tests/"
+
+# Serving tasks
+# Usage:
+#   mise run serve                                    # default: GPU 0, port 9006
+#   mise run serve -- --gpu 4                         # GPU 4
+#   mise run serve -- --gpu 4 --port 9015             # GPU 4, port 9015
+#   mise run serve -- --model-path my/model --gpu 0,1 --tp 2
+[tasks.serve]
+description = "Start SGLang server"
+run = "./scripts/sglang_server.sh"
 
 # Evaluation tasks
 [tasks.eval]
