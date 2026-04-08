@@ -7,7 +7,7 @@ readme = "README.md"
 authors = [
     { name = "Mingu Kang", email = "jeffkang@lunit.io" },
 ]
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.12"
 dependencies = [
     # Core dependencies
     "hydra-core>=1.3.0",
@@ -22,11 +22,16 @@ dependencies = [
     "deepeval>=3.7.7",
     "rich>=13.0.0",
     "scikit-learn>=1.8.0",
+    # SGLang
+    "sglang[all] @ git+https://github.com/trillion-labs/sglang-gravity.git#subdirectory=python",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/coeval"]
@@ -49,7 +54,7 @@ coeval = "coeval.main:main"
 
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py312"
 src = ["src"]
 
 [tool.ruff.lint]

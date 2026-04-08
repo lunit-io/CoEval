@@ -6,7 +6,7 @@
 
 *Part of the [Chain-of-Evidence](https://github.com/lunit-io) project by [Lunit](https://www.lunit.io)*
 
-[![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Hydra](https://img.shields.io/badge/config-Hydra-89b8cd?logo=yaml&logoColor=white)](https://hydra.cc/)
 [![DeepEval](https://img.shields.io/badge/metrics-DeepEval-6c5ce7)](https://docs.confident-ai.com/)
 [![HuggingFace](https://img.shields.io/badge/datasets-HuggingFace-ffd21e?logo=huggingface&logoColor=black)](https://huggingface.co/)
@@ -53,46 +53,57 @@ cd coeval
 
 ```bash
 mise trust          # Required on first clone — trusts mise.toml config
-mise run sync       # Installs Python 3.13 + deps via mise/uv
-# or
-uv sync --dev       # If you already have uv and Python 3.13 (skip mise)
+mise run sync       # Installs Python 3.12 + deps via mise/uv
 ```
 
-### 2. Serve your model
+### 2. Install SGLang (optional)
 
-CoEval works with any OpenAI-compatible API:
+CoEval uses [sglang-gravity](https://github.com/trillion-labs/sglang-gravity) to serve Gravity MoE models locally. Install it as an optional dependency:
 
 ```bash
-# SGLang (recommended)
-python -m sglang.launch_server --model learning-unit/your-model --port 8000
+uv sync --extra sglang
+```
 
-# vLLM
-vllm serve learning-unit/your-model --port 8000
+> **Note:** This is only needed if you want to serve models locally. If you already have an OpenAI-compatible endpoint running (vLLM, OpenAI, Azure, etc.), skip this step.
 
-# ☁️ Hosted API (OpenAI, Azure, etc.)
+### 3. Serve your model
+
+```bash
+# Start SGLang server (default: learning-unit/Test, GPU 0, port 9006)
+mise run serve
+
+# Custom GPU and port
+mise run serve -- --gpu 4 --port 9015
+
+# Custom model with multi-GPU
+mise run serve -- --model-path your/model --gpu 0,1 --tp 2
+```
+
+Or use any OpenAI-compatible API:
+
+```bash
+# Hosted API (OpenAI, Azure, etc.)
 export OPENAI_API_KEY=sk-...
 ```
 
-### 3. Configure and run
-
-`client.api_base` and `client.model` are required — pass them via CLI:
+### 4. Run evaluation
 
 ```bash
-# Smoke test (5 samples)
-mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model num_samples=5
-
-# Full benchmark (default: PubMedQA)
-mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model
+# Smoke test (5 samples, default dataset: PubMedQA)
+mise run eval -- num_samples=5
 
 # Single dataset
-mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model datasets=medqa
+mise run eval -- datasets=medqa
 
 # All 16 datasets
+mise run eval -- datasets=all
+
+# Custom endpoint (if not using mise run serve)
 mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model datasets=all
 ```
 
 
-### 4. (Optional) LLM-as-judge datasets
+### 5. (Optional) LLM-as-judge datasets
 
 Some datasets (e.g., HealthBench) use an LLM judge to score responses instead of exact match. These require an OpenAI API key for the judge model.
 
@@ -118,7 +129,7 @@ mise run eval -- datasets=healthbench_consensus
 
 > **Note:** `OPENAI_API_KEY` is used for both the model server and the judge model. Most MCQ datasets (MedQA, MedMCQA, etc.) use deterministic scoring and do **not** require a judge model.
 
-### 5. Check results
+### 6. Check results
 
 Results are saved to `evaluation_outputs/`:
 
