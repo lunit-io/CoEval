@@ -15,6 +15,3 @@ client:
   max_tokens: 4096
   timeout: 120.0
   api_key: ${oc.env:OPENAI_API_KEY,null}
-  additional_kwargs:
-    top_p: 1.0
-    presence_penalty: 0.0

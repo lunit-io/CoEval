@@ -203,5 +203,3 @@ class HealthBenchConsensusDataset(_HealthBenchDatasetBase):
     @property
     def name(self) -> str:
         return "HealthBenchConsensus"
-
-

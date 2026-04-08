@@ -233,14 +233,24 @@ class EvalConsole:
             total_time += time_s
 
         table.add_section()
-        total_row = ["[bold]AVG[/bold]"]
+        total_row = ["[bold]W.AVG[/bold]"]
 
         for metric_name in all_metrics:
-            scores = metric_totals[metric_name]
-            if scores:
-                avg = sum(scores) / len(scores)
-                style = "green" if avg >= 0.7 else "yellow" if avg >= 0.5 else "red"
-                total_row.append(f"[bold {style}]{avg:.3f}[/bold {style}]")
+            # Weighted average by sample count
+            weighted_sum = 0.0
+            weight_total = 0
+            for r in results:
+                import math
+
+                score = r.get("metric_scores", {}).get(metric_name)
+                samples = r.get("samples", 0)
+                if score is not None and not math.isnan(score) and samples > 0:
+                    weighted_sum += score * samples
+                    weight_total += samples
+            if weight_total > 0:
+                wavg = weighted_sum / weight_total
+                style = "green" if wavg >= 0.7 else "yellow" if wavg >= 0.5 else "red"
+                total_row.append(f"[bold {style}]{wavg:.3f}[/bold {style}]")
             else:
                 total_row.append("[dim]-[/dim]")
 
