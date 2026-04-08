@@ -10,19 +10,12 @@ from coeval.datasets.attributionbench import (
 from coeval.datasets.careqa import CareQADataset
 from coeval.datasets.headqa import HeadQADataset
 from coeval.datasets.healthbench import HealthBenchConsensusDataset
-from coeval.datasets.kormedmcqa import (
-    KorMedMCQADentistDataset,
-    KorMedMCQADoctorDataset,
-    KorMedMCQANurseDataset,
-    KorMedMCQAPharmDataset,
-)
 from coeval.datasets.m_arc import MARCDataset
 from coeval.datasets.medbullets import (
     Medbullets4OptionsDataset,
     Medbullets5OptionsDataset,
 )
 from coeval.datasets.medcalc import MedCalcDataset
-from coeval.datasets.medexqa import MedExQADataset
 from coeval.datasets.medhallu import MedHalluDataset
 from coeval.datasets.medmcqa import MedMCQADataset
 from coeval.datasets.medqa import MedQADataset
@@ -45,13 +38,8 @@ __all__ = [
     "CareQADataset",
     "HeadQADataset",
     "HealthBenchConsensusDataset",
-    "KorMedMCQADentistDataset",
-    "KorMedMCQADoctorDataset",
-    "KorMedMCQANurseDataset",
-    "KorMedMCQAPharmDataset",
     "MARCDataset",
     "MedCalcDataset",
-    "MedExQADataset",
     "MedHalluDataset",
     "MedMCQADataset",
     "MedQADataset",

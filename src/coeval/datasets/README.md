@@ -168,4 +168,4 @@ For custom prompts (e.g., MedCalc, MedHallu), define your own template in the da
 - **Option formatting**: Always format as `A. option_text\nB. option_text\n...`
 - **Answer normalization**: `expected_output` should be a single uppercase letter (A/B/C/D)
 - **Metadata**: Use `additional_metadata` to pass extra info (difficulty level, source, etc.) for breakdown reporting
-- **Grouped datasets**: For datasets with subsets (e.g., KorMedMCQA has Doctor/Nurse/Pharm/Dentist), create one YAML with nested entries under a group key. See `kormedmcqa.yaml` for an example.
+- **Grouped datasets**: For datasets with subsets, create one YAML with nested entries under a group key.

@@ -12,11 +12,10 @@ defaults:
   - mmlu_pro_health
   - m_arc
   - metamedqa
-  - medexqa
   - healthbench_consensus
+  - healthbench_full
   - medxpertqa
   - medbullets
   - attributionbench
   - medhallu
   - medcalc
-  - kormedmcqa
