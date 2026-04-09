@@ -4,7 +4,7 @@ set -euo pipefail
 # Defaults
 GPU=0
 PORT=9006
-MODEL="learning-unit/L1"
+MODEL="learning-unit/L1-16B-3A"
 TP=1
 EXTRA_ARGS=()
 
