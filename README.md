@@ -4,7 +4,7 @@
 
 **Medical LLM Evaluation Framework**
 
-*Part of the [Chain-of-Evidence](https://github.com/lunit-io) project by [Lunit](https://www.lunit.io)*
+*Part of the [Chain-of-Evidence](https://www.lunit.io/ko/media-hub/%eb%a3%a8%eb%8b%9b-%ec%a0%95%eb%b6%80-%ec%a3%bc%ea%b4%80-%ec%9d%98%ea%b3%bc%ed%95%99-%ed%8a%b9%ed%99%94-%ed%8c%8c%ec%9a%b4%eb%8d%b0%ec%9d%b4%ec%85%98-%eb%aa%a8%eb%8d%b8-1%eb%8b%a8%ea%b3%84-2/) project by [Lunit](https://www.lunit.io)*
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Hydra](https://img.shields.io/badge/config-Hydra-89b8cd?logo=yaml&logoColor=white)](https://hydra.cc/)
