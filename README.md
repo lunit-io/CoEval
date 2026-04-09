@@ -174,6 +174,8 @@ mise run eval -- datasets=all num_samples=50 # Quick run, 50 samples each
 | Classification | `ClassificationMetric` | Label extraction + exact match |
 | Numeric Accuracy | `NumericAccuracyMetric` | Numeric value comparison with tolerance |
 
+> **Note:** While these metrics are deterministic, scores may vary slightly across runs due to LLM generation randomness (e.g., different token sampling even at low temperatures). For fully reproducible results, use `temperature=0`.
+
 ### LLM-as-Judge (requires judge model)
 
 | Metric | Class | Description |
