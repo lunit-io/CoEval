@@ -1,21 +1,12 @@
-"""LLM client and configuration (inlined from coe_common)."""
+"""LLM configuration and the OpenAI-compatible client factory."""
 
-from coeval.llm.client import LLMClient
 from coeval.llm.config import LLMConfig
-from coeval.llm.exceptions import (
-    LLMConnectionError,
-    LLMError,
-    LLMRateLimitError,
-    LLMResponseError,
-    LLMTimeoutError,
-)
+from coeval.llm.factory import create_llm_client, normalize_api_key
+from coeval.llm.utils import to_chat_messages
 
 __all__ = [
-    "LLMClient",
     "LLMConfig",
-    "LLMConnectionError",
-    "LLMError",
-    "LLMRateLimitError",
-    "LLMResponseError",
-    "LLMTimeoutError",
+    "create_llm_client",
+    "normalize_api_key",
+    "to_chat_messages",
 ]

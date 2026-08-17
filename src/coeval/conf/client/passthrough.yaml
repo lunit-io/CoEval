@@ -1,21 +1,27 @@
 # @package _global_
 # Passthrough Client Configuration (Baseline - no RAG)
-# Uses LLMClient for OpenAI-compatible API calls
+# Direct OpenAI-compatible inference — no retrieval.
 #
 # Usage:
-#   mise run eval -- client.api_base=http://shared-cluster-vm-026:9006/v1 client.model=your-model
+#   mise run eval -- client.llm.config.api_base=http://shared-cluster-vm-026:9006/v1 \
+#                    client.llm.config.model=your-model
 
 system_prompt: "You are Chain-of-Evidence, a medical AI assistant developed by Lunit. For each question, reason step-by-step, then provide the answer."
 
 client:
   _target_: coeval.clients.PassthroughClient
-  api_base: http://shared-cluster-vm-026:9006/v1
-  model: default
-  temperature: 0.0
-  # Open-ended benchmarks (HealthBench) produce long-form answers; a small budget
-  # truncates them and silently depresses rubric scores.
-  max_tokens: 32768
-  timeout: 360.0
-  api_key: ${oc.env:OPENAI_API_KEY,null}
-  additional_kwargs:
-    top_p: 1.0
+  llm:
+    _target_: coeval.llm.factory.create_llm_client
+    config:
+      _target_: coeval.llm.config.LLMConfig
+      _convert_: all
+      api_base: http://shared-cluster-vm-026:9006/v1
+      model: default
+      api_key: ${oc.env:OPENAI_API_KEY,null}
+      temperature: 0.0
+      # Open-ended benchmarks (HealthBench) produce long-form answers; a small
+      # budget truncates them and silently depresses rubric scores.
+      max_tokens: 32768
+      timeout: 360.0
+      additional_kwargs:
+        top_p: 1.0
