@@ -6,7 +6,7 @@
 #   mise run eval -- client.llm.config.api_base=http://shared-cluster-vm-026:9006/v1 \
 #                    client.llm.config.model=your-model
 
-system_prompt: "You are Chain-of-Evidence, a medical AI assistant developed by Lunit. For each question, reason step-by-step, then provide the answer."
+system_prompt: "You are Chain-of-Evidence, a medical AI assistant developed by Lunit"
 
 client:
   _target_: coeval.clients.PassthroughClient
@@ -15,8 +15,8 @@ client:
     config:
       _target_: coeval.llm.config.LLMConfig
       _convert_: all
-      api_base: http://shared-cluster-vm-026:9006/v1
-      model: default
+      api_base: http://shared-cluster-vm-026:9410/v1
+      model: debug-phase3
       api_key: ${oc.env:OPENAI_API_KEY,null}
       temperature: 0.0
       max_retries: 0
