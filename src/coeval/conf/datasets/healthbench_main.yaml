@@ -1,0 +1,41 @@
+# @package _global_
+#
+# Standalone HealthBench Main config — the full `oss_eval` subset (5,000 examples),
+# the headline HealthBench benchmark. Consensus and Hard are curated slices of it.
+#
+# Scoring: clipped_avg_aggregator = clip(mean(per-example scores), 0, 1) — the
+# official HealthBench formula. Main mixes positive and negative (penalty) criteria,
+# so a per-example score — and the mean — can go net-negative; the clip is
+# load-bearing here, unlike on Consensus where it is a no-op safeguard.
+#
+# Cost: 5,000 examples × many rubric criteria each = tens of thousands of judge
+# calls. Smoke-test first:
+#   mise run eval -- datasets=healthbench_main num_samples=5
+# Stratified theme subset (preserves theme distribution):
+#   mise run eval -- datasets=healthbench_main '++datasets.healthbench_main.sample_ratio=0.1'
+#
+# Judge model swap (shared config group: conf/datasets/metrics/judge/):
+#   mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-4.1
+#   mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-5.6-sol
+
+defaults:
+  - metrics/judge@healthbench_judge: gpt-4.1
+
+datasets:
+  healthbench_main:
+    _target_: coeval.datasets.healthbench.HealthBenchMainDataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}
+    sample_ratio: null
+
+metrics:
+  healthbench_main:
+    healthbench_rubric:
+      _target_: coeval.metrics.healthbench_rubric.HealthBenchRubricMetric
+      concurrent_limit: 10
+      judge: ${healthbench_judge}
+
+score_aggregators:
+  healthbench_main:
+    _target_: coeval.util.aggregation.clipped_avg_aggregator
+    _partial_: true
