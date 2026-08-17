@@ -19,6 +19,7 @@ client:
       model: default
       api_key: ${oc.env:OPENAI_API_KEY,null}
       temperature: 0.0
+      max_retries: 0
       # Open-ended benchmarks (HealthBench) produce long-form answers; a small
       # budget truncates them and silently depresses rubric scores.
       max_tokens: 32768

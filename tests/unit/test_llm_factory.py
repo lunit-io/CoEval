@@ -118,13 +118,16 @@ class TestPassthroughClient:
         sent = llm.achat.await_args.args[0]
         assert [m.role for m in sent] == [MessageRole.SYSTEM, MessageRole.USER]
 
-    async def test_none_content_becomes_empty_string(self) -> None:
+    async def test_none_content_raises_inference_error(self) -> None:
         llm = SimpleNamespace(
             achat=AsyncMock(
                 return_value=SimpleNamespace(message=SimpleNamespace(content=None))
             )
         )
-        assert await PassthroughClient(llm=llm).generate([]) == ""
+        with pytest.raises(
+            RuntimeError, match="Inference response contained no content"
+        ):
+            await PassthroughClient(llm=llm).generate([])
 
     def test_name_is_class_name(self) -> None:
         assert PassthroughClient(llm=SimpleNamespace()).name == "PassthroughClient"

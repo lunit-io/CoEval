@@ -45,10 +45,19 @@ class EvalRunner:
         client: InferenceClient,
         concurrent_limit: int = 10,
         output_dir: str | None = None,
+        inference_max_attempts: int = 3,
+        inference_retry_delay_s: float = 1.0,
     ):
+        if inference_max_attempts < 1:
+            raise ValueError("inference_max_attempts must be at least 1")
+        if inference_retry_delay_s < 0:
+            raise ValueError("inference_retry_delay_s must be non-negative")
+
         self.client = client
         self.concurrent_limit = concurrent_limit
         self.output_dir = output_dir
+        self.inference_max_attempts = inference_max_attempts
+        self.inference_retry_delay_s = inference_retry_delay_s
         self.semaphore = asyncio.Semaphore(concurrent_limit)
 
     def _enable_json_mode(self, metrics: Sequence[BaseMetric]) -> None:
@@ -56,6 +65,31 @@ class EvalRunner:
         for metric in metrics:
             if hasattr(metric, "model") and hasattr(metric.model, "model_data"):
                 metric.model.model_data.supports_json = True
+
+    async def _generate_with_retry(self, messages: list[dict], sample_id: int) -> str:
+        """Generate one candidate response, retrying transient inference failures."""
+        last_error: Exception | None = None
+        for attempt in range(1, self.inference_max_attempts + 1):
+            try:
+                async with self.semaphore:
+                    result = await self.client.generate(messages)
+                return str(result) if result else ""
+            except Exception as error:
+                last_error = error
+                if attempt == self.inference_max_attempts:
+                    break
+                logger.warning(
+                    "Inference attempt %s/%s failed for sample %s: %s",
+                    attempt,
+                    self.inference_max_attempts,
+                    sample_id,
+                    error,
+                )
+                if self.inference_retry_delay_s:
+                    await asyncio.sleep(self.inference_retry_delay_s)
+
+        assert last_error is not None
+        raise last_error
 
     async def _generate_predictions(
         self,
@@ -75,9 +109,7 @@ class EvalRunner:
 
             try:
                 query = dataset.get_generation_input(golden)
-                async with self.semaphore:
-                    result = await self.client.generate(query)
-                    completion = str(result) if result else ""
+                completion = await self._generate_with_retry(query, idx)
             except Exception as e:
                 logger.error(f"Inference failed for sample {idx}: {e}")
                 completion, inference_error = "", str(e)
@@ -123,7 +155,7 @@ class EvalRunner:
             return [
                 MetricResult(
                     name=m.__name__,
-                    score=0.0,
+                    score=None,
                     passed=False,
                     reason="Skipped: inference failed",
                 )
@@ -137,7 +169,7 @@ class EvalRunner:
             return [
                 MetricResult(
                     name=m.__name__,
-                    score=0.0,
+                    score=None,
                     passed=False,
                     reason="Missing eval result",
                 )

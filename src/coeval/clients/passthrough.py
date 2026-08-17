@@ -35,7 +35,13 @@ class PassthroughClient(EvaluationLLMClient):
             messages: Full message list from ``dataset.get_generation_input()``.
 
         Returns:
-            Raw LLM response content, or ``""`` when the reply carries none.
+            Raw LLM response content.
+
+        Raises:
+            RuntimeError: If the reply carries no content.
         """
         response = await self.llm.achat(to_chat_messages(messages))
-        return str(response.message.content or "")
+        content = response.message.content
+        if content is None:
+            raise RuntimeError("Inference response contained no content")
+        return str(content)
