@@ -281,6 +281,94 @@ class TestHealthBenchRubricMeasure:
         assert "No available workers" in metric.error
         assert client.a_generate.await_count == 2
 
+    async def test_criterion_failure_cancels_and_drains_sibling_tasks(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One exhausted rubric must cancel an unfinished sibling before returning."""
+        metric = HealthBenchRubricMetric(
+            judge=_make_judge(),
+            max_attempts=1,
+            retry_delay_s=0,
+        )
+        failure = RuntimeError("rubric exhausted")
+        slow_started = asyncio.Event()
+        slow_cancelled = asyncio.Event()
+        release_slow = asyncio.Event()
+
+        async def grade_item(_convo: str, rubric: dict) -> dict:
+            if rubric["criterion"] == "slow":
+                slow_started.set()
+                try:
+                    await release_slow.wait()
+                except asyncio.CancelledError:
+                    slow_cancelled.set()
+                    raise
+                return {"explanation": "late", "criteria_met": True}
+            await slow_started.wait()
+            raise failure
+
+        monkeypatch.setattr(metric, "_grade_rubric_item", grade_item)
+        test_case = _make_test_case(
+            rubrics=[
+                {"criterion": "slow", "points": 1.0, "tags": []},
+                {"criterion": "failing", "points": 1.0, "tags": []},
+            ]
+        )
+
+        try:
+            with pytest.raises(RuntimeError) as exc_info:
+                await metric.a_measure(test_case)
+
+            assert exc_info.value is failure
+            assert slow_cancelled.is_set()
+        finally:
+            release_slow.set()
+            await asyncio.sleep(0)
+
+    async def test_grade_with_retry_accepts_legacy_positional_arguments(self) -> None:
+        """The pre-retry-option positional call order remains supported."""
+        client = _make_judge()
+        client.a_generate.return_value = json.dumps(
+            {"explanation": "ok", "criteria_met": True}
+        )
+
+        result = await grade_with_retry(
+            client,
+            asyncio.Semaphore(1),
+            "grade this",
+            "criterion",
+            "false",
+            "legacy system prompt",
+            max_attempts=1,
+            retry_delay_s=0,
+        )
+
+        assert result == {"explanation": "ok", "criteria_met": True}
+        client.a_generate.assert_awaited_once_with(
+            "grade this", system_prompt="legacy system prompt"
+        )
+
+    async def test_legacy_false_fallback_includes_terminal_failure(self) -> None:
+        """Compatibility fallback preserves the final failed-attempt diagnostic."""
+        client = _make_judge()
+        client.a_generate.side_effect = [
+            RuntimeError("temporary outage"),
+            RuntimeError("terminal worker outage"),
+        ]
+
+        result = await grade_with_retry(
+            model=client,
+            semaphore=asyncio.Semaphore(1),
+            prompt="grade this",
+            context_label="criterion",
+            on_failure="false",
+            max_attempts=2,
+            retry_delay_s=0,
+        )
+
+        assert result["criteria_met"] is False
+        assert "terminal worker outage" in result["explanation"]
+
     async def test_custom_attempt_count_controls_legacy_false_fallback(self) -> None:
         """The compatibility fallback makes exactly the configured total attempts."""
         client = _make_judge()

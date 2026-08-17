@@ -211,19 +211,32 @@ class EvalRunner:
         eval_lookup: EvalLookup,
     ) -> list[EvalResult]:
         """Build EvalResult list from eval_lookup."""
-        return [
-            EvalResult(
-                sample_id=meta["sample_id"],
-                test_case=tc,
-                rationale=meta["rationale"],
-                metrics=self._score_test_case(tc, meta, metrics, eval_lookup),
-                generation_time_ms=meta["generation_time_ms"],
-                scoring_time_ms=0.0,
-                inference_failed=meta["inference_failed"],
-                inference_error=meta["inference_error"],
+        results: list[EvalResult] = []
+        for tc, meta in zip(test_cases, metadata_list, strict=True):
+            metric_results = self._score_test_case(tc, meta, metrics, eval_lookup)
+            top_level_scores = eval_lookup.get(meta["sample_id"])
+            scoring_failed = (
+                not meta["inference_failed"]
+                and bool(metrics)
+                and (
+                    top_level_scores is None
+                    or any(score.score is None for score in top_level_scores)
+                )
             )
-            for tc, meta in zip(test_cases, metadata_list, strict=True)
-        ]
+            results.append(
+                EvalResult(
+                    sample_id=meta["sample_id"],
+                    test_case=tc,
+                    rationale=meta["rationale"],
+                    metrics=metric_results,
+                    generation_time_ms=meta["generation_time_ms"],
+                    scoring_time_ms=0.0,
+                    inference_failed=meta["inference_failed"],
+                    inference_error=meta["inference_error"],
+                    scoring_failed=scoring_failed,
+                )
+            )
+        return results
 
     def _build_summary(
         self,
@@ -233,7 +246,9 @@ class EvalRunner:
         score_aggregator: ScoreAggregatorFn,
     ) -> EvalSummary:
         """Build summary statistics from evaluation results."""
-        successful = [r for r in results if not r.inference_failed]
+        fully_scored = [
+            r for r in results if not r.inference_failed and not r.scoring_failed
+        ]
         n = len(results)
 
         aggregation_result = score_aggregator(results)
@@ -241,8 +256,9 @@ class EvalRunner:
         return EvalSummary(
             dataset=dataset_name,
             num_samples=n,
-            num_passed=sum(r.passed for r in successful),
-            num_inference_failed=n - len(successful),
+            num_passed=sum(r.passed for r in fully_scored),
+            num_inference_failed=sum(r.inference_failed for r in results),
+            num_scoring_failed=sum(r.scoring_failed for r in results),
             total_time_s=total_time,
             avg_generation_ms=sum(r.generation_time_ms for r in results) / n
             if n
@@ -275,10 +291,19 @@ class EvalRunner:
         predictions, metadata_list = await self._generate_predictions(dataset)
         test_cases = dataset.build_test_cases(predictions)
 
-        eval_lookup = evaluate(
-            test_cases=test_cases,
-            metrics=metrics,
-            max_concurrent=self.concurrent_limit,
+        scorable_test_cases = [
+            tc
+            for tc, metadata in zip(test_cases, metadata_list, strict=True)
+            if not metadata["inference_failed"]
+        ]
+        eval_lookup = (
+            evaluate(
+                test_cases=scorable_test_cases,
+                metrics=metrics,
+                max_concurrent=self.concurrent_limit,
+            )
+            if scorable_test_cases
+            else {}
         )
 
         results = self._build_eval_results(
@@ -293,6 +318,7 @@ class EvalRunner:
             summary.pass_rate,
             total_time,
             summary.num_inference_failed,
+            summary.num_scoring_failed,
         )
 
         if self.output_dir:

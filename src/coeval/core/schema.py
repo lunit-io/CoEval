@@ -80,12 +80,13 @@ class EvalResult(BaseModel):
     scoring_time_ms: float
     inference_failed: bool = False
     inference_error: str | None = None
+    scoring_failed: bool = False
 
     @computed_field
     @property
     def passed(self) -> bool:
-        """Whether all metrics passed (False if inference failed)."""
-        if self.inference_failed:
+        """Whether all metrics passed (False if inference or scoring failed)."""
+        if self.inference_failed or self.scoring_failed:
             return False
         return all(m.passed for m in self.metrics)
 
@@ -110,6 +111,7 @@ class EvalResult(BaseModel):
             "passed": self.passed,
             "inference_failed": self.inference_failed,
             "inference_error": self.inference_error,
+            "scoring_failed": self.scoring_failed,
             "generation_time_ms": self.generation_time_ms,
             "scoring_time_ms": self.scoring_time_ms,
             "metrics": [
@@ -160,13 +162,14 @@ class EvalSummary(BaseModel):
     avg_scoring_ms: float
     metric_scores: dict[str, MetricScoreDetail]
     num_inference_failed: int = 0
+    num_scoring_failed: int = 0
     breakdown: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     @computed_field
     @property
     def num_evaluated(self) -> int:
-        """Number of samples successfully evaluated (excluding inference failures)."""
-        return self.num_samples - self.num_inference_failed
+        """Number of samples with completed inference and scoring."""
+        return self.num_samples - self.num_inference_failed - self.num_scoring_failed
 
     @computed_field
     @property
@@ -184,6 +187,14 @@ class EvalSummary(BaseModel):
             else 0.0
         )
 
+    @computed_field
+    @property
+    def scoring_failure_rate(self) -> float:
+        """Rate of scoring infrastructure failures."""
+        return (
+            self.num_scoring_failed / self.num_samples if self.num_samples > 0 else 0.0
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "dataset": self.dataset,
@@ -191,8 +202,10 @@ class EvalSummary(BaseModel):
             "num_evaluated": self.num_evaluated,
             "num_passed": self.num_passed,
             "num_inference_failed": self.num_inference_failed,
+            "num_scoring_failed": self.num_scoring_failed,
             "pass_rate": self.pass_rate,
             "inference_failure_rate": self.inference_failure_rate,
+            "scoring_failure_rate": self.scoring_failure_rate,
             "total_time_s": self.total_time_s,
             "avg_generation_ms": self.avg_generation_ms,
             "avg_scoring_ms": self.avg_scoring_ms,

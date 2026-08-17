@@ -32,8 +32,10 @@ def _validate_retry_settings(max_attempts: int, retry_delay_s: float) -> None:
         raise ValueError("retry_delay_s must be non-negative")
 
 
-def parse_grading_response(text: str) -> dict | None:
+def parse_grading_response(text: object) -> dict | None:
     """Parse grader JSON response, stripping markdown fences if present."""
+    if not isinstance(text, str):
+        return None
     cleaned = re.sub(r"^```json\s*|\s*```$", "", text.strip())
     try:
         result = json.loads(cleaned)
@@ -73,10 +75,11 @@ async def grade_with_retry(
     semaphore: asyncio.Semaphore,
     prompt: str,
     context_label: str,
-    max_attempts: int = MAX_RETRIES,
-    retry_delay_s: float = 1.0,
     on_failure: Literal["raise", "false"] = "raise",
     system_prompt: str = "You are a helpful evaluation assistant.",
+    *,
+    max_attempts: int = MAX_RETRIES,
+    retry_delay_s: float = 1.0,
 ) -> dict:
     """Retry loop for rubric grading.
 
@@ -85,14 +88,14 @@ async def grade_with_retry(
         semaphore: Concurrency limiter.
         prompt: Full grading prompt.
         context_label: Short label for log messages (e.g. claim text or criterion).
-        max_attempts: Total judge calls allowed, including the initial attempt.
-        retry_delay_s: Base retry delay in seconds; each retry doubles it.
         on_failure: What to do when retries are exhausted.
             "raise"  — raise RuntimeError so the caller can exclude the sample
                        from aggregates (AnswerCorrectnessRubric semantics).
             "false"  — return {"criteria_met": False, "explanation": "..."}
                        for legacy external callers.
         system_prompt: System prompt passed to the judge.
+        max_attempts: Total judge calls allowed, including the initial attempt.
+        retry_delay_s: Base retry delay in seconds; each retry doubles it.
 
     Returns:
         Parsed grading dict with at least "criteria_met" (bool) and "explanation" (str).
@@ -142,7 +145,7 @@ async def grade_with_retry(
             raise error from last_request_error
         raise error
     return {
-        "explanation": "Failed to parse grading response after retries",
+        "explanation": f"Failed to grade after retries: {last_failure}",
         "criteria_met": False,
     }
 
@@ -293,9 +296,18 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
             )
 
             # Grade each rubric criterion concurrently
-            grading_responses = await asyncio.gather(
-                *[self._grade_rubric_item(convo_str, rubric) for rubric in rubrics]
-            )
+            grading_tasks = [
+                asyncio.create_task(self._grade_rubric_item(convo_str, rubric))
+                for rubric in rubrics
+            ]
+            try:
+                grading_responses = await asyncio.gather(*grading_tasks)
+            except BaseException:
+                for grading_task in grading_tasks:
+                    if not grading_task.done():
+                        grading_task.cancel()
+                await asyncio.gather(*grading_tasks, return_exceptions=True)
+                raise
 
             # Calculate score
             score = calculate_score(rubrics, grading_responses)

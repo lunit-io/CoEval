@@ -436,4 +436,5 @@ def merge_summaries(
         ),
         metric_scores=merged,
         num_inference_failed=sum(s.num_inference_failed for s in summaries),
+        num_scoring_failed=sum(s.num_scoring_failed for s in summaries),
     )
