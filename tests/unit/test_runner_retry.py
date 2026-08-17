@@ -1,6 +1,7 @@
 """Tests for candidate-inference retries and failure accounting."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -85,6 +86,30 @@ async def test_custom_attempt_count_retries_without_sleep_when_delay_is_zero(
         == "recovered answer"
     )
     assert client.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_delay_doubles_after_each_failed_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retries must wait longer after each consecutive transient failure."""
+    client = _SequencedClient(
+        [RuntimeError("first"), RuntimeError("second"), "recovered answer"]
+    )
+    runner = EvalRunner(
+        client=client,
+        concurrent_limit=1,
+        inference_max_attempts=3,
+        inference_retry_delay_s=0.25,
+    )
+    sleep = AsyncMock()
+    monkeypatch.setattr("coeval.core.runner.asyncio.sleep", sleep)
+
+    result = await runner._generate_with_retry([{"role": "user", "content": "q"}], 7)
+
+    assert result == "recovered answer"
+    assert client.calls == 3
+    assert sleep.await_args_list == [call(0.25), call(0.5)]
 
 
 @pytest.mark.parametrize(

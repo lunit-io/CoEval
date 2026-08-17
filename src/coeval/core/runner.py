@@ -86,7 +86,9 @@ class EvalRunner:
                     error,
                 )
                 if self.inference_retry_delay_s:
-                    await asyncio.sleep(self.inference_retry_delay_s)
+                    await asyncio.sleep(
+                        self.inference_retry_delay_s * 2 ** (attempt - 1)
+                    )
 
         assert last_error is not None
         raise last_error
