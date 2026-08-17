@@ -101,12 +101,16 @@ async def grade_with_retry(
         RuntimeError: Only when on_failure="raise" and all retries are exhausted.
     """
     _validate_retry_settings(max_attempts, retry_delay_s)
+    last_failure: str | None = None
+    last_request_error: Exception | None = None
 
     for attempt in range(max_attempts):
         try:
             async with semaphore:
                 response = await model.a_generate(prompt, system_prompt=system_prompt)
-        except Exception:
+        except Exception as error:
+            last_failure = str(error)
+            last_request_error = error
             logger.warning(
                 "Grader request failed (attempt %d/%d)",
                 attempt + 1,
@@ -117,6 +121,8 @@ async def grade_with_retry(
             result = parse_grading_response(response)
             if result is not None:
                 return result
+            last_failure = "Invalid grading response"
+            last_request_error = None
             logger.warning(
                 "Grading parse failed (attempt %d/%d)", attempt + 1, max_attempts
             )
@@ -128,10 +134,13 @@ async def grade_with_retry(
         "Grading failed after %d attempts for: %s", max_attempts, context_label[:80]
     )
     if on_failure == "raise":
-        raise RuntimeError(
+        error = RuntimeError(
             f"Judge failed to grade claim after {max_attempts} attempts: "
-            f"{context_label[:80]}"
+            f"{context_label[:80]}; last error: {last_failure}"
         )
+        if last_request_error is not None:
+            raise error from last_request_error
+        raise error
     return {
         "explanation": "Failed to parse grading response after retries",
         "criteria_met": False,

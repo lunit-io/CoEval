@@ -253,6 +253,34 @@ class TestHealthBenchRubricMeasure:
         assert metric.score is None
         assert metric.error is not None
 
+    async def test_exhausted_request_errors_preserve_terminal_diagnostic(
+        self,
+    ) -> None:
+        """The aggregate-exclusion error retains the final judge failure reason."""
+        client = _make_judge()
+        client.a_generate.side_effect = [
+            RuntimeError("first worker failure"),
+            RuntimeError("No available workers"),
+        ]
+        metric = HealthBenchRubricMetric(
+            judge=client,
+            max_attempts=2,
+            retry_delay_s=0,
+        )
+        test_case = _make_test_case(
+            rubrics=[{"criterion": "c1", "points": 1.0, "tags": []}]
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await metric.a_measure(test_case)
+
+        assert "No available workers" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, RuntimeError)
+        assert str(exc_info.value.__cause__) == "No available workers"
+        assert metric.error is not None
+        assert "No available workers" in metric.error
+        assert client.a_generate.await_count == 2
+
     async def test_custom_attempt_count_controls_legacy_false_fallback(self) -> None:
         """The compatibility fallback makes exactly the configured total attempts."""
         client = _make_judge()
