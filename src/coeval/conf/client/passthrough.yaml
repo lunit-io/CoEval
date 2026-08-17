@@ -3,13 +3,13 @@
 # Uses LLMClient for OpenAI-compatible API calls
 #
 # Usage:
-#   mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model
+#   mise run eval -- client.api_base=http://shared-cluster-vm-026:9006/v1 client.model=your-model
 
 system_prompt: "You are Chain-of-Evidence, a medical AI assistant developed by Lunit. For each question, reason step-by-step, then provide the answer."
 
 client:
   _target_: coeval.clients.PassthroughClient
-  api_base: http://localhost:9006/v1
+  api_base: http://shared-cluster-vm-026:9006/v1
   model: default
   temperature: 0.0
   # Open-ended benchmarks (HealthBench) produce long-form answers; a small budget

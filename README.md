@@ -91,7 +91,7 @@ mise run eval -- datasets=medqa
 mise run eval -- datasets=all
 
 # Custom endpoint (if not using mise run serve)
-mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model datasets=all
+mise run eval -- client.api_base=http://shared-cluster-vm-026:9006/v1 client.model=your-model datasets=all
 ```
 
 
