@@ -8,11 +8,23 @@ from coeval.util.aggregation import (
     UNPARSEABLE_LABEL,
     _filter_results,
     avg_aggregator,
+    clipped_avg_aggregator,
     composite_aggregator,
     f1_aggregator,
     ordinal_classification_aggregator,
     weighted_avg_aggregator,
 )
+
+
+def make_score_result(sample_id: int, metric_name: str, score: float) -> EvalResult:
+    """Create an EvalResult carrying a single bare score, no classification details."""
+    return EvalResult(
+        sample_id=sample_id,
+        test_case=LLMTestCase(input="test", actual_output=""),
+        metrics=[MetricResult(name=metric_name, score=score, passed=score >= 0.5)],
+        generation_time_ms=100.0,
+        scoring_time_ms=10.0,
+    )
 
 
 def make_eval_result(
@@ -825,3 +837,38 @@ class TestOrdinalLabelOrder:
         )
 
         assert result.metric_scores["adjacent_accuracy"].score == pytest.approx(0.5)
+
+
+class TestClippedAvgAggregator:
+    """clip(mean(per-example scores), 0, 1) — the official HealthBench formula."""
+
+    def test_negative_mean_clips_to_zero(self) -> None:
+        results = [make_score_result(i, "m", s) for i, s in enumerate([-0.5, -0.3])]
+        assert clipped_avg_aggregator(results).metric_scores["m"].score == 0.0
+
+    def test_mean_above_one_clips_to_one(self) -> None:
+        results = [make_score_result(i, "m", s) for i, s in enumerate([1.5, 1.2])]
+        assert clipped_avg_aggregator(results).metric_scores["m"].score == 1.0
+
+    def test_in_range_mean_passes_through(self) -> None:
+        results = [make_score_result(i, "m", s) for i, s in enumerate([0.4, 0.6])]
+        detail = clipped_avg_aggregator(results).metric_scores["m"]
+        assert detail.score == pytest.approx(0.5)
+
+    def test_numerator_rescaled_so_merge_cannot_undo_clip(self) -> None:
+        """weighted_merge recomputes sum(num)/sum(den); it must not resurrect -0.75."""
+        results = [make_score_result(i, "m", s) for i, s in enumerate([-1.0, -0.5])]
+        detail = clipped_avg_aggregator(results).metric_scores["m"]
+        assert detail.score == 0.0
+        assert detail.denominator == 2.0
+        assert detail.numerator == 0.0
+
+    def test_breakdown_keeps_raw_mean(self) -> None:
+        """Raw statistics survive as diagnostics even when the score is clipped."""
+        results = [make_score_result(i, "m", s) for i, s in enumerate([-0.5, -0.3])]
+        assert clipped_avg_aggregator(results).breakdown["m"]["mean"] == pytest.approx(
+            -0.4
+        )
+
+    def test_empty_results(self) -> None:
+        assert clipped_avg_aggregator([]).metric_scores == {}
