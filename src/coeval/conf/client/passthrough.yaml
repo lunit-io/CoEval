@@ -12,6 +12,10 @@ client:
   api_base: http://localhost:9006/v1
   model: default
   temperature: 0.0
-  max_tokens: 4096
-  timeout: 120.0
+  # Open-ended benchmarks (HealthBench) produce long-form answers; a small budget
+  # truncates them and silently depresses rubric scores.
+  max_tokens: 32768
+  timeout: 360.0
   api_key: ${oc.env:OPENAI_API_KEY,null}
+  additional_kwargs:
+    top_p: 1.0
