@@ -117,6 +117,9 @@ Then run:
 ```bash
 # Run HealthBench — your model generates responses, gpt-4.1 grades them
 mise run eval -- datasets=healthbench_consensus
+
+# Full HealthBench (5,000 examples) — smoke-test with num_samples first
+mise run eval -- datasets=healthbench_main num_samples=5
 ```
 
 > **Note:** `OPENAI_API_KEY` is used for both the model server and the judge model. Most MCQ datasets (MedQA, MedMCQA, etc.) use deterministic scoring and do **not** require a judge model.
@@ -154,8 +157,11 @@ All datasets are evaluated as **MCQ (multiple-choice question)** unless noted ot
 | [MedHallu](https://huggingface.co/datasets/UTAustin-AIHealth/MedHallu) | `medhallu` | Hallucination detection | Binary classification | Macro F1 |
 | [MedCalc](https://huggingface.co/datasets/ncbi/MedCalc-Bench) | `medcalc` | Clinical calculation | Open-ended numeric | Numeric Accuracy |
 | [PubMedQA](https://huggingface.co/datasets/qiaojin/PubMedQA) | `pubmedqa` | PubMed abstracts | 3-option MCQ (Yes/No/Maybe) | MCQ Accuracy |
+| [HealthBench](https://huggingface.co/datasets/openai/HealthBench) | `healthbench_main` | OpenAI | Open-ended multi-turn | LLM-as-judge (rubric) |
 | [HealthBench](https://huggingface.co/datasets/openai/HealthBench) | `healthbench_consensus` | OpenAI | Open-ended multi-turn | LLM-as-judge (rubric) |
 | [AttributionBench](https://huggingface.co/datasets/osunlp/AttributionBench) | `attributionbench` | OSU NLP | Binary classification | Macro F1 |
+
+> `healthbench_main` is the headline 5,000-example benchmark; `healthbench_consensus` is a physician-validated slice of it. `datasets=all` deliberately excludes `healthbench_main` — 5,000 examples × many rubric criteria each would make a quick run ruinously slow and expensive.
 
 ```bash
 mise run eval -- datasets=medqa              # Single dataset
@@ -216,7 +222,15 @@ mise run eval -- datasets=medqa num_samples=100 client.temperature=0.3
 mise run eval -- 'system_prompt="Answer concisely."'
 
 # Swap judge model for HealthBench
-mise run eval -- datasets=healthbench_consensus datasets/metrics/judge@healthbench_judge=gpt-4.1
+mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-4.1
+
+# Grade with gpt-5.6-sol through headless `codex exec` (codex-cli >= 0.146.0).
+# Authenticate the host once, then keep concurrency modest — each grading call
+# is a separate process, not an HTTP request:
+#   codex login --api-key "$OPENAI_API_KEY"
+mise run eval -- datasets=healthbench_main \
+  datasets/metrics/judge@healthbench_judge=gpt-5.6-sol \
+  metrics.healthbench_main.healthbench_rubric.concurrent_limit=4
 ```
 
 ---
