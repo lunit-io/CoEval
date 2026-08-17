@@ -1,14 +1,17 @@
 """Tests for HealthBench rubric grading metric."""
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from deepeval.metrics.utils import copy_metrics
 from deepeval.test_case import ConversationalTestCase, Turn
 
 from coeval.metrics.healthbench_rubric import (
     GRADER_TEMPLATE,
     HealthBenchRubricMetric,
+    grade_with_retry,
 )
 
 # ---------------------------------------------------------------------------
@@ -91,6 +94,29 @@ class TestHealthBenchRubricMetricInit:
         client = _make_judge()
         metric = HealthBenchRubricMetric(judge=client, concurrent_limit=5)
         assert metric.concurrent_limit == 5
+
+    @pytest.mark.parametrize(
+        ("max_attempts", "retry_delay_s"),
+        [(0, 1.0), (1, -0.1)],
+    )
+    def test_invalid_retry_settings_are_rejected(
+        self, max_attempts: int, retry_delay_s: float
+    ) -> None:
+        """Invalid HealthBench retry settings fail during metric construction."""
+        with pytest.raises(ValueError):
+            HealthBenchRubricMetric(
+                judge=_make_judge(),
+                max_attempts=max_attempts,
+                retry_delay_s=retry_delay_s,
+            )
+
+    def test_deepeval_metric_copies_reuse_the_shared_semaphore(self) -> None:
+        """Copies must preserve the one limiter that bounds every test case."""
+        metric = HealthBenchRubricMetric(judge=_make_judge(), concurrent_limit=2)
+
+        copies = [copy_metrics([metric])[0] for _ in range(3)]
+
+        assert all(copy._semaphore is metric._semaphore for copy in copies)
 
 
 # ---------------------------------------------------------------------------
@@ -207,18 +233,148 @@ class TestHealthBenchRubricMeasure:
         assert client.a_generate.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_fallback_after_max_retries(self) -> None:
-        """After max retries, criteria_met defaults to False."""
+    async def test_exhausted_retries_raise_and_leave_metric_unscored(self) -> None:
+        """An exhausted rubric judge error excludes the example from aggregates."""
         client = _make_judge()
         client.a_generate.return_value = "always bad json"
-        metric = HealthBenchRubricMetric(judge=client)
+        metric = HealthBenchRubricMetric(
+            judge=client,
+            max_attempts=2,
+            retry_delay_s=0,
+        )
         test_case = _make_test_case(
             rubrics=[{"criterion": "c1", "points": 1.0, "tags": []}]
         )
 
-        score = await metric.a_measure(test_case)
-        # Falls back to criteria_met=False -> 0/1 = 0.0
-        assert score == pytest.approx(0.0)
+        with pytest.raises(RuntimeError, match="after 2 attempts"):
+            await metric.a_measure(test_case)
+
+        assert client.a_generate.await_count == 2
+        assert metric.score is None
+        assert metric.error is not None
+
+    async def test_custom_attempt_count_controls_legacy_false_fallback(self) -> None:
+        """The compatibility fallback makes exactly the configured total attempts."""
+        client = _make_judge()
+        client.a_generate.return_value = "always bad json"
+
+        result = await grade_with_retry(
+            model=client,
+            semaphore=asyncio.Semaphore(1),
+            prompt="grade this",
+            context_label="criterion",
+            max_attempts=4,
+            retry_delay_s=0,
+            on_failure="false",
+        )
+
+        assert result["criteria_met"] is False
+        assert client.a_generate.await_count == 4
+
+    async def test_transient_request_and_parse_failures_recover(self) -> None:
+        """A request error and invalid response do not prevent a later verdict."""
+        client = _make_judge()
+        client.a_generate.side_effect = [
+            RuntimeError("temporary request failure"),
+            "not valid json",
+            json.dumps({"explanation": "recovered", "criteria_met": True}),
+        ]
+
+        result = await grade_with_retry(
+            model=client,
+            semaphore=asyncio.Semaphore(1),
+            prompt="grade this",
+            context_label="criterion",
+            max_attempts=3,
+            retry_delay_s=0,
+        )
+
+        assert result == {"explanation": "recovered", "criteria_met": True}
+        assert client.a_generate.await_count == 3
+
+    async def test_retry_waits_use_exponential_delays_outside_semaphore(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Backoff releases the shared judge slot before waiting to retry."""
+        client = _make_judge()
+        client.a_generate.return_value = "not valid json"
+        semaphore = asyncio.Semaphore(1)
+        delays: list[float] = []
+
+        async def record_sleep(delay: float) -> None:
+            assert not semaphore.locked()
+            delays.append(delay)
+
+        monkeypatch.setattr(
+            "coeval.metrics.healthbench_rubric.asyncio.sleep", record_sleep
+        )
+
+        await grade_with_retry(
+            model=client,
+            semaphore=semaphore,
+            prompt="grade this",
+            context_label="criterion",
+            max_attempts=3,
+            retry_delay_s=0.25,
+            on_failure="false",
+        )
+
+        assert delays == [0.25, 0.5]
+
+    @pytest.mark.parametrize(
+        ("max_attempts", "retry_delay_s"),
+        [(0, 1.0), (1, -0.1)],
+    )
+    async def test_grade_with_retry_rejects_invalid_retry_settings(
+        self, max_attempts: int, retry_delay_s: float
+    ) -> None:
+        """The retry helper rejects values that cannot define a retry policy."""
+        client = _make_judge()
+
+        with pytest.raises(ValueError):
+            await grade_with_retry(
+                model=client,
+                semaphore=asyncio.Semaphore(1),
+                prompt="grade this",
+                context_label="criterion",
+                max_attempts=max_attempts,
+                retry_delay_s=retry_delay_s,
+            )
+
+    async def test_shared_semaphore_caps_concurrency_across_deepeval_copies(
+        self,
+    ) -> None:
+        """DeepEval copies together cannot exceed the configured judge limit."""
+        active = 0
+        peak_active = 0
+
+        async def grade_slowly(*_args, **_kwargs) -> str:
+            nonlocal active, peak_active
+            active += 1
+            peak_active = max(peak_active, active)
+            try:
+                await asyncio.sleep(0)
+                return json.dumps({"explanation": "ok", "criteria_met": True})
+            finally:
+                active -= 1
+
+        client = _make_judge()
+        client.a_generate.side_effect = grade_slowly
+        metric = HealthBenchRubricMetric(judge=client, concurrent_limit=2)
+        metric_copies = [copy_metrics([metric])[0] for _ in range(4)]
+
+        await asyncio.gather(
+            *[
+                metric_copy.a_measure(
+                    _make_test_case(
+                        rubrics=[{"criterion": "c1", "points": 1.0, "tags": []}]
+                    )
+                )
+                for metric_copy in metric_copies
+            ]
+        )
+
+        assert peak_active == 2
 
     @pytest.mark.asyncio
     async def test_details_contain_rubric_grades(self) -> None:

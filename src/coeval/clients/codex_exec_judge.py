@@ -21,8 +21,7 @@ here:
 
 This class does not retry. ``grade_with_retry`` in
 :mod:`coeval.metrics.healthbench_rubric` already catches exceptions, retries
-``MAX_RETRIES`` times, and then applies HealthBench's official
-``on_failure="false"`` semantics.
+the configured total number of attempts, and then raises exhausted failures.
 """
 
 import asyncio

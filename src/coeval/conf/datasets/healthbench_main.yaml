@@ -33,6 +33,8 @@ metrics:
     healthbench_rubric:
       _target_: coeval.metrics.healthbench_rubric.HealthBenchRubricMetric
       concurrent_limit: 10
+      max_attempts: 3
+      retry_delay_s: 1.0
       judge: ${healthbench_judge}
 
 score_aggregators:

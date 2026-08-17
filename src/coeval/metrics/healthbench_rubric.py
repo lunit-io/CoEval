@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES: int = 3
 
 
+def _validate_retry_settings(max_attempts: int, retry_delay_s: float) -> None:
+    """Reject retry settings that cannot define a finite retry policy."""
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
+    if retry_delay_s < 0:
+        raise ValueError("retry_delay_s must be non-negative")
+
+
 def parse_grading_response(text: str) -> dict | None:
     """Parse grader JSON response, stripping markdown fences if present."""
     cleaned = re.sub(r"^```json\s*|\s*```$", "", text.strip())
@@ -65,7 +73,9 @@ async def grade_with_retry(
     semaphore: asyncio.Semaphore,
     prompt: str,
     context_label: str,
-    on_failure: Literal["raise", "false"],
+    max_attempts: int = MAX_RETRIES,
+    retry_delay_s: float = 1.0,
+    on_failure: Literal["raise", "false"] = "raise",
     system_prompt: str = "You are a helpful evaluation assistant.",
 ) -> dict:
     """Retry loop for rubric grading.
@@ -75,11 +85,13 @@ async def grade_with_retry(
         semaphore: Concurrency limiter.
         prompt: Full grading prompt.
         context_label: Short label for log messages (e.g. claim text or criterion).
+        max_attempts: Total judge calls allowed, including the initial attempt.
+        retry_delay_s: Base retry delay in seconds; each retry doubles it.
         on_failure: What to do when retries are exhausted.
             "raise"  — raise RuntimeError so the caller can exclude the sample
                        from aggregates (AnswerCorrectnessRubric semantics).
             "false"  — return {"criteria_met": False, "explanation": "..."}
-                       to preserve HealthBench official scoring semantics.
+                       for legacy external callers.
         system_prompt: System prompt passed to the judge.
 
     Returns:
@@ -88,7 +100,9 @@ async def grade_with_retry(
     Raises:
         RuntimeError: Only when on_failure="raise" and all retries are exhausted.
     """
-    for attempt in range(MAX_RETRIES):
+    _validate_retry_settings(max_attempts, retry_delay_s)
+
+    for attempt in range(max_attempts):
         try:
             async with semaphore:
                 response = await model.a_generate(prompt, system_prompt=system_prompt)
@@ -96,21 +110,26 @@ async def grade_with_retry(
             logger.warning(
                 "Grader request failed (attempt %d/%d)",
                 attempt + 1,
-                MAX_RETRIES,
+                max_attempts,
                 exc_info=True,
             )
-            continue
-        result = parse_grading_response(response)
-        if result is not None:
-            return result
-        logger.warning("Grading parse failed (attempt %d/%d)", attempt + 1, MAX_RETRIES)
+        else:
+            result = parse_grading_response(response)
+            if result is not None:
+                return result
+            logger.warning(
+                "Grading parse failed (attempt %d/%d)", attempt + 1, max_attempts
+            )
+
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(retry_delay_s * 2**attempt)
 
     logger.error(
-        "Grading failed after %d retries for: %s", MAX_RETRIES, context_label[:80]
+        "Grading failed after %d attempts for: %s", max_attempts, context_label[:80]
     )
     if on_failure == "raise":
         raise RuntimeError(
-            f"Judge failed to grade claim after {MAX_RETRIES} retries: "
+            f"Judge failed to grade claim after {max_attempts} attempts: "
             f"{context_label[:80]}"
         )
     return {
@@ -197,13 +216,23 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
         judge: DeepEvalBaseLLM,
         concurrent_limit: int = 10,
         threshold: float = 0.5,
+        max_attempts: int = MAX_RETRIES,
+        retry_delay_s: float = 1.0,
+        _semaphore: asyncio.Semaphore | None = None,
         **_kwargs: Any,
     ) -> None:
         """Initialize with judge model and concurrency limit for grading."""
+        _validate_retry_settings(max_attempts, retry_delay_s)
         self.judge = judge
         self.concurrent_limit = concurrent_limit
         self.threshold = threshold
-        self._semaphore = asyncio.Semaphore(concurrent_limit)
+        self.max_attempts = max_attempts
+        self.retry_delay_s = retry_delay_s
+        self._semaphore = (
+            _semaphore
+            if _semaphore is not None
+            else asyncio.Semaphore(concurrent_limit)
+        )
 
         # DeepEval state
         self.score: float | None = None
@@ -324,7 +353,7 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
 
         except Exception as e:
             self.error = str(e)
-            self.score = 0.0
+            self.score = None
             self.success = False
             self.reason = f"Grading failed: {e}"
             logger.exception("HealthBench rubric grading failed")
@@ -345,7 +374,9 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
             semaphore=self._semaphore,
             prompt=grader_prompt,
             context_label=rubric["criterion"],
-            on_failure="false",
+            max_attempts=self.max_attempts,
+            retry_delay_s=self.retry_delay_s,
+            on_failure="raise",
             system_prompt="You are a helpful assistant.",
         )
 
