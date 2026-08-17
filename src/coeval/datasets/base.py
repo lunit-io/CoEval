@@ -181,6 +181,8 @@ class MultiTurnDatasetBase(GoldenDatasetBase):
             zip(self.goldens, predictions, strict=True)
         ):
             metadata = dict(golden.additional_metadata or {})
+            if metadata.get("system_prompt") is None:
+                metadata["system_prompt"] = self.system_prompt
             metadata["_sample_id"] = idx
 
             turns = list(golden.turns or [])

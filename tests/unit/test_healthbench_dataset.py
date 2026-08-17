@@ -222,6 +222,34 @@ class TestHealthBenchConsensusDataset:
         assert "system_prompt" in tc.additional_metadata
         assert tc.additional_metadata["_sample_id"] == 0
 
+    @patch("coeval.datasets.healthbench.urllib.request.urlopen")
+    def test_build_test_cases_copies_effective_system_prompt(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        """Fallback system prompt is preserved in generated test-case metadata."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = _mock_jsonl_response(
+            [_make_sample(prompt=[{"role": "user", "content": "Hello"}])]
+        )
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        effective_prompt = "You are a careful medical assistant."
+        dataset = HealthBenchConsensusDataset(system_prompt=effective_prompt)
+        golden = dataset.goldens[0]
+
+        assert golden.additional_metadata["system_prompt"] is None
+        assert dataset.get_generation_input(golden)[0] == {
+            "role": "system",
+            "content": effective_prompt,
+        }
+
+        test_case = dataset.build_test_cases(["Test response"])[0]
+
+        assert test_case.additional_metadata["system_prompt"] == effective_prompt
+        assert golden.additional_metadata["system_prompt"] is None
+
     # -----------------------------------------------------------------------
     # Stratified sampling tests
     # -----------------------------------------------------------------------
