@@ -224,13 +224,12 @@ mise run eval -- 'system_prompt="Answer concisely."'
 # Swap judge model for HealthBench
 mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-4.1
 
-# Grade with gpt-5.6-sol through headless `codex exec` (codex-cli >= 0.146.0).
-# Authenticate the host once, then keep concurrency modest — each grading call
-# is a separate process, not an HTTP request:
-#   codex login --api-key "$OPENAI_API_KEY"
-mise run eval -- datasets=healthbench_main \
-  datasets/metrics/judge@healthbench_judge=gpt-5.6-sol \
-  metrics.healthbench_main.healthbench_rubric.concurrent_limit=4
+# Grade with gpt-5.6-sol instead
+mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-5.6-sol
+
+# Point any judge at a compatible endpoint instead of OpenAI
+OPENAI_API_BASE=http://shared-cluster-vm-026:9002/v1 \
+  mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-4.1
 ```
 
 ---
