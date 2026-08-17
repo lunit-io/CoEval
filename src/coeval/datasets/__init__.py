@@ -9,7 +9,10 @@ from coeval.datasets.attributionbench import (
 )
 from coeval.datasets.careqa import CareQADataset
 from coeval.datasets.headqa import HeadQADataset
-from coeval.datasets.healthbench import HealthBenchConsensusDataset
+from coeval.datasets.healthbench import (
+    HealthBenchConsensusDataset,
+    HealthBenchMainDataset,
+)
 from coeval.datasets.m_arc import MARCDataset
 from coeval.datasets.medbullets import (
     Medbullets4OptionsDataset,
@@ -38,6 +41,7 @@ __all__ = [
     "CareQADataset",
     "HeadQADataset",
     "HealthBenchConsensusDataset",
+    "HealthBenchMainDataset",
     "MARCDataset",
     "MedCalcDataset",
     "MedHalluDataset",
