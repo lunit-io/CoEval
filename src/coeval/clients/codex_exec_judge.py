@@ -1,29 +1,3 @@
-"""DeepEvalBaseLLM adapter that grades via the ``codex exec`` CLI.
-
-One judge call is one headless ``codex exec`` process. Unlike
-:class:`~coeval.clients.passthrough_judge.PassthroughJudge` there is no HTTP
-endpoint: Codex uses its own persisted credentials, so the machine must be
-authenticated once with::
-
-    codex login --api-key "$OPENAI_API_KEY"
-
-Setting ``OPENAI_API_KEY`` alone is not sufficient.
-
-Verified against codex-cli 0.146.0. Two CLI behaviours drive the error handling
-here:
-
-- ``codex exec`` exits 0 even when every upstream request fails; on failure it
-  simply leaves the ``-o`` output file empty. The output file, not the return
-  code, is the authoritative success signal.
-- A ``bubblewrap not found`` warning is written to stderr on most systems and is
-  harmless — Codex falls back to a bundled copy. stderr is never treated as a
-  failure signal.
-
-This class does not retry. ``grade_with_retry`` in
-:mod:`coeval.metrics.healthbench_rubric` already catches exceptions, retries
-the configured total number of attempts, and then raises exhausted failures.
-"""
-
 import asyncio
 import json
 import logging
@@ -37,10 +11,6 @@ from deepeval.models import DeepEvalBaseLLM
 
 logger = logging.getLogger(__name__)
 
-# Values the codex config layer accepts for `model_reasoning_effort`. Codex does
-# NOT validate this itself — a typo sails past `--strict-config` and only fails
-# server-side, one process per rubric criterion later. So it is checked here, at
-# construction, instead.
 REASONING_EFFORTS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh"})
 
 
@@ -48,16 +18,6 @@ class CodexExecJudge(DeepEvalBaseLLM):
     """Judge backed by headless ``codex exec`` invocations.
 
     Args:
-        model: Model id passed to ``codex exec --model``.
-        sandbox: Codex sandbox policy (``read-only``, ``workspace-write``,
-            ``danger-full-access``). Grading needs no writes.
-        reasoning_effort: Passed through as ``-c model_reasoning_effort=...``.
-            One of :data:`REASONING_EFFORTS`, or ``None`` to leave the flag off
-            and take the Codex default. Defaults to ``"high"`` — rubric grading
-            is a judgement call, not a lookup.
-        timeout: Seconds to wait for one process before killing it.
-        output_schema: JSON Schema forced on the model's final message via
-            ``--output-schema``. ``None`` leaves the response free-form.
         cwd: Working root for Codex. Defaults to a private temp directory so
             Codex cannot read the surrounding repository and let its contents
             leak into a grading verdict.
@@ -105,7 +65,6 @@ class CodexExecJudge(DeepEvalBaseLLM):
         return self._model_id
 
     def get_model_name(self) -> str:
-        """Return the judge model name."""
         return self.name
 
     def _build_prompt(self, prompt: str, system_prompt: str | None = None) -> str:
@@ -116,7 +75,6 @@ class CodexExecJudge(DeepEvalBaseLLM):
         return f"# System\n{sp}\n\n# Task\n{prompt}"
 
     def _build_argv(self, out_path: str) -> list[str]:
-        """Assemble the codex exec command line for one grading call."""
         argv = [
             "codex",
             "exec",
@@ -200,5 +158,4 @@ class CodexExecJudge(DeepEvalBaseLLM):
     def generate(
         self, prompt: str, *, system_prompt: str | None = None, **_kwargs: Any
     ) -> str:
-        """Synchronously run one codex exec process."""
         return asyncio.run(self.a_generate(prompt, system_prompt=system_prompt))

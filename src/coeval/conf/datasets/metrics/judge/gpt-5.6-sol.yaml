@@ -1,24 +1,4 @@
 # Judge: gpt-5.6-sol via headless `codex exec` (codex-cli >= 0.146.0).
-#
-# No OPENAI_API_KEY at eval time — Codex uses its own persisted credentials.
-# Authenticate the host once, either way:
-#   codex login                                          # ChatGPT subscription
-#   codex login --device-auth                            # headless box, no browser
-#   printenv OPENAI_API_KEY | codex login --with-api-key # API key
-#
-# One grading call is one process, so keep the metric's concurrency modest:
-#   mise run eval -- datasets=healthbench_main \
-#     datasets/metrics/judge@healthbench_judge=gpt-5.6-sol \
-#     metrics.healthbench_main.healthbench_rubric.concurrent_limit=4
-#
-# reasoning_effort rides through as `-c model_reasoning_effort=...`. Codex does
-# not validate the value, so CodexExecJudge checks it at construction.
-# Cheaper grading:
-#   '++healthbench_judge.reasoning_effort=low'
-#
-# `_convert_: all` makes Hydra hand `output_schema` over as a plain dict rather
-# than a DictConfig, so the client can json.dumps it without importing omegaconf.
-# The schema matches what GRADER_TEMPLATE asks the judge to return.
 _target_: coeval.clients.CodexExecJudge
 _convert_: all
 model: gpt-5.6-sol

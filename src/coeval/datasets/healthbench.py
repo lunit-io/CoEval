@@ -199,10 +199,6 @@ class HealthBenchMainDataset(_HealthBenchDatasetBase):
     Rubrics mix positive and negative (penalty) point criteria, so a per-example
     score can go net-negative; the reported metric clips the mean to [0, 1]
     (see :func:`coeval.util.aggregation.clipped_avg_aggregator`).
-
-    Usage:
-        dataset = HealthBenchMainDataset(num_samples=5)
-        print(len(dataset.goldens))
     """
 
     _URL = MAIN_URL

@@ -1,9 +1,3 @@
-"""Tests for the codex exec-backed judge.
-
-No real subprocess is spawned: asyncio.create_subprocess_exec is patched with a
-fake that writes the output file the way codex exec would.
-"""
-
 import asyncio
 import json
 from pathlib import Path
@@ -80,8 +74,6 @@ class _FakeProc:
 
 @pytest.fixture
 def spawn(monkeypatch):
-    """Install a fake subprocess spawner; returns a dict recording argv and proc."""
-
     def _install(**proc_kwargs):
         state: dict = {}
 
@@ -107,7 +99,6 @@ async def test_returns_output_file_contents(spawn) -> None:
 
 
 async def test_exit_zero_with_empty_output_raises(spawn) -> None:
-    """codex exec exits 0 even when every request 401s, leaving -o empty."""
     spawn(output="")
     with pytest.raises(RuntimeError, match="no output"):
         await CodexExecJudge().a_generate("grade this")
@@ -140,7 +131,6 @@ async def test_timeout_kills_process_and_raises(spawn) -> None:
 
 
 async def test_cancellation_kills_and_reaps_process(spawn) -> None:
-    """Cancelling a live judge call must not orphan its subprocess."""
     state = spawn(hang=True)
     task = asyncio.create_task(CodexExecJudge().a_generate("grade this"))
     await asyncio.sleep(0)
@@ -155,7 +145,6 @@ async def test_cancellation_kills_and_reaps_process(spawn) -> None:
 
 
 async def test_cancellation_preserves_cancelled_error_when_child_exits(spawn) -> None:
-    """A child-exit race must not replace the caller's cancellation."""
     state = spawn(hang=True, process_exits_before_kill=True)
     task = asyncio.create_task(CodexExecJudge().a_generate("grade this"))
     await asyncio.sleep(0)
@@ -170,7 +159,6 @@ async def test_cancellation_preserves_cancelled_error_when_child_exits(spawn) ->
 
 
 async def test_bubblewrap_warning_on_stderr_still_succeeds(spawn) -> None:
-    """stderr noise is not a failure signal."""
     spawn(
         stderr=b"warning: Codex could not find bubblewrap on PATH",
         output=VALID_OUTPUT,
@@ -205,7 +193,6 @@ async def test_output_schema_flag_only_when_schema_given(spawn) -> None:
 
 
 async def test_system_prompt_prepended_to_stdin(spawn) -> None:
-    """codex exec has no system-prompt flag, so it rides in the prompt body."""
     state = spawn(output=VALID_OUTPUT)
     await CodexExecJudge().a_generate("grade this", system_prompt="be terse")
     payload = state["proc"].stdin_payload.decode()
@@ -240,13 +227,11 @@ async def test_reasoning_effort_none_omits_the_flag(spawn) -> None:
 
 
 def test_unknown_reasoning_effort_rejected_at_construction() -> None:
-    """codex accepts any value and only fails server-side, so validate up front."""
     with pytest.raises(ValueError, match="Unknown reasoning_effort"):
         CodexExecJudge(reasoning_effort="very-hard")
 
 
 def test_model_id_survives_base_class_init() -> None:
-    """DeepEvalBaseLLM.__init__ overwrites self.model with load_model()."""
     judge = CodexExecJudge(model="gpt-5.6-sol")
     assert judge._model_id == "gpt-5.6-sol"
     assert judge.get_model_name() == judge.name

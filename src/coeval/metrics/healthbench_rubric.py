@@ -25,7 +25,6 @@ MAX_RETRIES: int = 3
 
 
 def _validate_retry_settings(max_attempts: int, retry_delay_s: float) -> None:
-    """Reject retry settings that cannot define a finite retry policy."""
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
     if retry_delay_s < 0:

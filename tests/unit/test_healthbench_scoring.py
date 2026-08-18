@@ -166,7 +166,6 @@ class TestParseGradingResponse:
 
     @pytest.mark.parametrize("response", [None, 123, {"criteria_met": True}])
     def test_non_string_response_returns_none(self, response: object) -> None:
-        """Unexpected judge return types are invalid responses, not parser errors."""
         assert parse_grading_response(response) is None
 
 

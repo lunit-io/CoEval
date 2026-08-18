@@ -1,5 +1,3 @@
-"""Tests for process-level and combined-summary failure reporting."""
-
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -43,7 +41,6 @@ def test_main_exits_nonzero_when_no_samples_are_evaluated(
     num_inference_failed: int,
     num_scoring_failed: int,
 ) -> None:
-    """A run with no valid score must not report process success."""
     summaries = [
         _summary(
             "failed",
@@ -73,7 +70,6 @@ def test_main_exits_nonzero_when_no_samples_are_evaluated(
 def test_main_keeps_zero_exit_when_any_sample_is_evaluated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Partial infrastructure failure remains reportable without failing the process."""
     summaries = [
         _summary(
             "partial",
@@ -93,7 +89,6 @@ def test_main_keeps_zero_exit_when_any_sample_is_evaluated(
 def test_main_exits_nonzero_when_no_dataset_has_samples(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Skipping every empty dataset must not report process success."""
     monkeypatch.setattr(main_module, "run_evaluation", AsyncMock(return_value=[]))
     monkeypatch.setattr(main_module, "_build_display", lambda _cfg, value: value)
     monkeypatch.setattr(main_module, "console", MagicMock())
@@ -108,7 +103,6 @@ def test_main_exits_nonzero_when_no_dataset_has_samples(
 def test_combined_summary_includes_failure_counts(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    """Combined artifacts must expose the failures that individual summaries retain."""
     monkeypatch.setattr(
         summary_module.HydraConfig,
         "get",

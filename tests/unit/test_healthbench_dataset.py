@@ -226,7 +226,6 @@ class TestHealthBenchConsensusDataset:
     def test_build_test_cases_copies_effective_system_prompt(
         self, mock_urlopen: MagicMock
     ) -> None:
-        """Fallback system prompt is preserved in generated test-case metadata."""
         mock_response = MagicMock()
         mock_response.read.return_value = _mock_jsonl_response(
             [_make_sample(prompt=[{"role": "user", "content": "Hello"}])]
@@ -444,7 +443,6 @@ class TestHealthBenchConsensusDataset:
 
 
 def _mock_urlopen(mock_urlopen: MagicMock, samples: list[dict]) -> None:
-    """Wire a patched urlopen to return the given samples as a JSONL response."""
     mock_response = MagicMock()
     mock_response.read.return_value = _mock_jsonl_response(samples)
     mock_response.__enter__ = lambda s: s
@@ -460,7 +458,6 @@ def _mock_urlopen(mock_urlopen: MagicMock, samples: list[dict]) -> None:
 class TestHealthBenchMainDataset:
     @pytest.fixture(autouse=True)
     def no_cache(self, tmp_path):
-        """Point cache dir at an empty temp directory so the real cache is untouched."""
         with patch(
             "coeval.datasets.healthbench._CACHE_DIR",
             tmp_path / "coeval_cache",
@@ -482,7 +479,6 @@ class TestHealthBenchMainDataset:
 
     @patch("coeval.datasets.healthbench.urllib.request.urlopen")
     def test_preserves_penalty_rubrics(self, mock_urlopen: MagicMock) -> None:
-        """Negative-point criteria survive the load — the clip depends on them."""
         sample = _make_sample(
             prompt_id="penalty-001",
             rubrics=[

@@ -1,6 +1,5 @@
 # @package _global_
 # Passthrough Client Configuration (Baseline - no RAG)
-# Direct OpenAI-compatible inference — no retrieval.
 #
 # Usage:
 #   mise run eval -- client.llm.config.api_base=http://shared-cluster-vm-026:9006/v1 \
@@ -20,8 +19,7 @@ client:
       api_key: ${oc.env:OPENAI_API_KEY,null}
       temperature: 0.0
       max_retries: 0
-      # Open-ended benchmarks (HealthBench) produce long-form answers; a small
-      # budget truncates them and silently depresses rubric scores.
+      # Avoid truncating long-form HealthBench answers.
       max_tokens: 32768
       timeout: 360.0
       additional_kwargs:

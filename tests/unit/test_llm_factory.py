@@ -1,10 +1,3 @@
-"""Tests for the OpenAILike factory, message conversion, and PassthroughClient.
-
-These cover the surface that replaced the old LLMClient wrapper. No network:
-the factory is asserted on the constructed OpenAILike, and PassthroughClient is
-driven through a stub llm.
-"""
-
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -22,7 +15,6 @@ class TestNormalizeApiKey:
         "value", [None, "", "   ", "null", "NULL", "none", "empty"]
     )
     def test_placeholders_become_none(self, value: str | None) -> None:
-        """Hydra resolves an unset ${oc.env:...,null} to the string 'null'."""
         assert normalize_api_key(value) is None
 
     def test_real_key_is_stripped(self) -> None:
@@ -50,7 +42,6 @@ class TestCreateLLMClient:
         assert llm.context_window == 4096
 
     def test_additional_kwargs_survive_the_hashable_round_trip(self) -> None:
-        """LLMConfig stores additional_kwargs as a tuple; the factory must re-dict it."""
         llm = create_llm_client(
             LLMConfig(
                 api_base="http://x/v1", model="m", additional_kwargs={"top_p": 1.0}
@@ -103,7 +94,6 @@ class TestPassthroughClient:
         assert await client.generate([{"role": "user", "content": "q"}]) == "the answer"
 
     async def test_generate_forwards_full_message_list(self) -> None:
-        """The client injects no system prompt of its own."""
         llm = SimpleNamespace(
             achat=AsyncMock(
                 return_value=SimpleNamespace(message=SimpleNamespace(content="ok"))

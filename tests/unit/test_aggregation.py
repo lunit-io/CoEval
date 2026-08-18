@@ -17,7 +17,6 @@ from coeval.util.aggregation import (
 
 
 def make_score_result(sample_id: int, metric_name: str, score: float) -> EvalResult:
-    """Create an EvalResult carrying a single bare score, no classification details."""
     return EvalResult(
         sample_id=sample_id,
         test_case=LLMTestCase(input="test", actual_output=""),
@@ -840,8 +839,6 @@ class TestOrdinalLabelOrder:
 
 
 class TestClippedAvgAggregator:
-    """clip(mean(per-example scores), 0, 1) — the official HealthBench formula."""
-
     def test_negative_mean_clips_to_zero(self) -> None:
         results = [make_score_result(i, "m", s) for i, s in enumerate([-0.5, -0.3])]
         assert clipped_avg_aggregator(results).metric_scores["m"].score == 0.0
@@ -856,7 +853,6 @@ class TestClippedAvgAggregator:
         assert detail.score == pytest.approx(0.5)
 
     def test_numerator_rescaled_so_merge_cannot_undo_clip(self) -> None:
-        """weighted_merge recomputes sum(num)/sum(den); it must not resurrect -0.75."""
         results = [make_score_result(i, "m", s) for i, s in enumerate([-1.0, -0.5])]
         detail = clipped_avg_aggregator(results).metric_scores["m"]
         assert detail.score == 0.0
@@ -864,7 +860,6 @@ class TestClippedAvgAggregator:
         assert detail.numerator == 0.0
 
     def test_breakdown_keeps_raw_mean(self) -> None:
-        """Raw statistics survive as diagnostics even when the score is clipped."""
         results = [make_score_result(i, "m", s) for i, s in enumerate([-0.5, -0.3])]
         assert clipped_avg_aggregator(results).breakdown["m"]["mean"] == pytest.approx(
             -0.4

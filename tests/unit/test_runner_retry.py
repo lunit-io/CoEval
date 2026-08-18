@@ -1,5 +1,3 @@
-"""Tests for candidate-inference retries and failure accounting."""
-
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
 
@@ -14,8 +12,6 @@ from coeval.util.console import EvalConsole
 
 
 class _SequencedClient:
-    """Inference fake that returns or raises each supplied outcome in order."""
-
     def __init__(self, outcomes: list[str | Exception]) -> None:
         self.outcomes = outcomes
         self.calls = 0
@@ -38,7 +34,6 @@ def _dataset() -> SimpleNamespace:
 
 @pytest.mark.asyncio
 async def test_two_transient_failures_then_success_yields_successful_sample() -> None:
-    """A third successful attempt must not be recorded as an inference failure."""
     client = _SequencedClient(
         [RuntimeError("first"), RuntimeError("second"), "recovered answer"]
     )
@@ -54,7 +49,6 @@ async def test_two_transient_failures_then_success_yields_successful_sample() ->
 
 @pytest.mark.asyncio
 async def test_exhausted_attempts_record_final_exception() -> None:
-    """Failure accounting must retain the exception from the final attempt."""
     client = _SequencedClient(
         [RuntimeError("first"), RuntimeError("second"), RuntimeError("final")]
     )
@@ -72,7 +66,6 @@ async def test_exhausted_attempts_record_final_exception() -> None:
 async def test_custom_attempt_count_retries_without_sleep_when_delay_is_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A zero-delay retry must use the configured attempt count without sleeping."""
     client = _SequencedClient([RuntimeError("first"), "recovered answer"])
     runner = EvalRunner(
         client=client,
@@ -97,7 +90,6 @@ async def test_custom_attempt_count_retries_without_sleep_when_delay_is_zero(
 async def test_retry_delay_doubles_after_each_failed_attempt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Retries must wait longer after each consecutive transient failure."""
     client = _SequencedClient(
         [RuntimeError("first"), RuntimeError("second"), "recovered answer"]
     )
@@ -127,7 +119,6 @@ async def test_retry_delay_doubles_after_each_failed_attempt(
 def test_invalid_retry_configuration_is_rejected(
     kwargs: dict[str, float | int], message: str
 ) -> None:
-    """Invalid retry bounds must fail before any inference is attempted."""
     with pytest.raises(ValueError, match=message):
         EvalRunner(client=_SequencedClient(["unused"]), **kwargs)
 
@@ -158,8 +149,6 @@ def test_invalid_retry_configuration_is_rejected(
 def test_unavailable_scores_are_none(
     metadata: dict, eval_lookup: dict, reason: str
 ) -> None:
-    """Infrastructure failures must be excluded from score aggregation."""
-
     class Metric:
         __name__ = "metric"
 
@@ -229,7 +218,6 @@ def _capture_built_results(
 
 @pytest.mark.asyncio
 async def test_run_rejects_empty_metrics_before_inference() -> None:
-    """A missing metric configuration must fail before spending an inference call."""
     client = _SequencedClient(["unused"])
     runner = EvalRunner(client=client)
 
@@ -243,7 +231,6 @@ async def test_run_rejects_empty_metrics_before_inference() -> None:
 async def test_run_skips_failed_inference_cases_during_judge_evaluation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A failed candidate remains in results but never reaches the Judge."""
     runner = EvalRunner(
         client=_SelectiveClient({0}),
         concurrent_limit=1,
@@ -277,7 +264,6 @@ async def test_run_skips_failed_inference_cases_during_judge_evaluation(
 async def test_run_does_not_call_judge_when_all_inferences_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An all-failed candidate batch still produces one failure result per sample."""
     runner = EvalRunner(
         client=_SelectiveClient({0, 1}),
         concurrent_limit=1,
@@ -318,7 +304,6 @@ def _test_case(sample_id: int) -> LLMTestCase:
 
 
 def test_build_eval_results_marks_only_judge_failures_as_scoring_failed() -> None:
-    """Only a non-inference row with a missing top-level score is scoring-failed."""
     runner = EvalRunner(client=_SequencedClient(["unused"]))
     results = runner._build_eval_results(
         [_test_case(10), _test_case(20), _test_case(30)],
@@ -350,7 +335,6 @@ def test_build_eval_results_marks_only_judge_failures_as_scoring_failed() -> Non
 def test_build_eval_results_requires_exact_configured_metric_set(
     metrics: list[object], scores: list[MetricScore]
 ) -> None:
-    """Missing or unexpected judge metrics must fail closed."""
     runner = EvalRunner(client=_SequencedClient(["unused"]))
 
     result = runner._build_eval_results(
@@ -389,7 +373,6 @@ def _eval_result(
 
 
 def test_summary_and_schema_exclude_scoring_failures_from_pass_rate() -> None:
-    """Pass rate counts only rows with completed inference and scoring."""
     runner = EvalRunner(client=_SequencedClient(["unused"]))
     results = [
         _eval_result(0, score=1.0),
@@ -412,7 +395,6 @@ def test_summary_and_schema_exclude_scoring_failures_from_pass_rate() -> None:
 
 
 def test_summary_excludes_partial_metric_sets_from_all_aggregates() -> None:
-    """A partially scored row must not leak into any metric denominator."""
     runner = EvalRunner(client=_SequencedClient(["unused"]))
     results = runner._build_eval_results(
         [_test_case(0), _test_case(1), _test_case(2)],
@@ -459,7 +441,6 @@ def _summary(
 
 
 def test_merge_summaries_sums_scoring_failures() -> None:
-    """Merged summary denominators retain scoring failures from every shard."""
     merged = merge_summaries(
         [
             _summary(
@@ -486,7 +467,6 @@ def test_merge_summaries_sums_scoring_failures() -> None:
 
 
 def test_console_reports_scoring_failures_in_denominator_and_annotation() -> None:
-    """Completion output uses the fully scored denominator and labels both failures."""
     eval_console = EvalConsole()
     eval_console._console = MagicMock()
 

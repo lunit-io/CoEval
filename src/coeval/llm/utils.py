@@ -1,5 +1,3 @@
-"""Message conversion helpers for OpenAI-compatible LLM clients."""
-
 from typing import Any
 
 from llama_index.core.base.llms.types import ChatMessage

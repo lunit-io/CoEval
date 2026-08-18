@@ -67,7 +67,6 @@ class EvalRunner:
                 metric.model.model_data.supports_json = True
 
     async def _generate_with_retry(self, messages: list[dict], sample_id: int) -> str:
-        """Generate one candidate response, retrying transient inference failures."""
         last_error: Exception | None = None
         for attempt in range(1, self.inference_max_attempts + 1):
             try:

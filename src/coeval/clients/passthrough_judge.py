@@ -1,12 +1,3 @@
-"""DeepEvalBaseLLM adapter backed by an OpenAILike client.
-
-A judge only needs raw LLM access (``achat``), so it composes an ``OpenAILike``
-directly rather than an eval ``PassthroughClient``. Serves as a judge for:
-
-- deepeval built-in metrics (Faithfulness, GEval, etc.) via generate/a_generate
-- custom metrics like the HealthBench rubric via ``a_generate(prompt, system_prompt=...)``
-"""
-
 import asyncio
 from typing import Any
 
@@ -20,36 +11,18 @@ from coeval.llm.utils import to_chat_messages
 
 
 class PassthroughJudge(DeepEvalBaseLLM):
-    """DeepEvalBaseLLM backed by an OpenAILike client.
-
-    ``LLMConfig`` is instantiated by Hydra via ``_target_`` and injected here.
-
-    Args:
-        config: Endpoint and sampling settings for the judge model.
-        system_prompt: Default system prompt for judge calls. Callers may
-            override it per call via ``a_generate(system_prompt=...)``.
-
-    Example YAML:
-        judge:
-          _target_: coeval.clients.PassthroughJudge
-          config:
-            _target_: coeval.llm.config.LLMConfig
-            api_base: https://api.openai.com/v1
-            model: gpt-4.1
-    """
+    """OpenAI-compatible DeepEval judge with per-call system-prompt overrides."""
 
     def __init__(
         self,
         config: LLMConfig,
         system_prompt: str = "You are a helpful assistant.",
     ) -> None:
-        """Build the judge's OpenAILike client from an LLMConfig."""
         self._llm = create_llm_client(config)
         self._system_prompt = system_prompt
         super().__init__(model=config.model)
 
     def load_model(self) -> OpenAILike:
-        """Return the underlying OpenAILike client."""
         return self._llm
 
     def get_model_name(self) -> str:

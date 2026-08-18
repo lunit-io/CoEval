@@ -1,20 +1,3 @@
-"""Passthrough client for baseline evaluation — direct LLM inference, no retrieval.
-
-Composes an ``OpenAILike`` (as ``self.llm`` via ``EvaluationLLMClient``) that Hydra
-builds through :func:`coeval.llm.factory.create_llm_client`. Works with any
-OpenAI-compatible API — vLLM, SGLang, OpenAI, Azure OpenAI.
-
-Example YAML:
-    client:
-      _target_: coeval.clients.PassthroughClient
-      llm:
-        _target_: coeval.llm.factory.create_llm_client
-        config:
-          _target_: coeval.llm.config.LLMConfig
-          api_base: http://shared-cluster-vm-026:9006/v1
-          model: default
-"""
-
 from typing import Any
 
 from coeval.clients.base import EvaluationLLMClient

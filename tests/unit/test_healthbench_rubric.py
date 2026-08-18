@@ -102,7 +102,6 @@ class TestHealthBenchRubricMetricInit:
     def test_invalid_retry_settings_are_rejected(
         self, max_attempts: int, retry_delay_s: float
     ) -> None:
-        """Invalid HealthBench retry settings fail during metric construction."""
         with pytest.raises(ValueError):
             HealthBenchRubricMetric(
                 judge=_make_judge(),
@@ -111,7 +110,6 @@ class TestHealthBenchRubricMetricInit:
             )
 
     def test_deepeval_metric_copies_reuse_the_shared_semaphore(self) -> None:
-        """Copies must preserve the one limiter that bounds every test case."""
         metric = HealthBenchRubricMetric(judge=_make_judge(), concurrent_limit=2)
 
         copies = [copy_metrics([metric])[0] for _ in range(3)]
@@ -234,7 +232,6 @@ class TestHealthBenchRubricMeasure:
 
     @pytest.mark.asyncio
     async def test_exhausted_retries_raise_and_leave_metric_unscored(self) -> None:
-        """An exhausted rubric judge error excludes the example from aggregates."""
         client = _make_judge()
         client.a_generate.return_value = "always bad json"
         metric = HealthBenchRubricMetric(
@@ -256,7 +253,6 @@ class TestHealthBenchRubricMeasure:
     async def test_exhausted_request_errors_preserve_terminal_diagnostic(
         self,
     ) -> None:
-        """The aggregate-exclusion error retains the final judge failure reason."""
         client = _make_judge()
         client.a_generate.side_effect = [
             RuntimeError("first worker failure"),
@@ -284,7 +280,6 @@ class TestHealthBenchRubricMeasure:
     async def test_criterion_failure_cancels_and_drains_sibling_tasks(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """One exhausted rubric must cancel an unfinished sibling before returning."""
         metric = HealthBenchRubricMetric(
             judge=_make_judge(),
             max_attempts=1,
@@ -326,7 +321,6 @@ class TestHealthBenchRubricMeasure:
             await asyncio.sleep(0)
 
     async def test_grade_with_retry_accepts_legacy_positional_arguments(self) -> None:
-        """The pre-retry-option positional call order remains supported."""
         client = _make_judge()
         client.a_generate.return_value = json.dumps(
             {"explanation": "ok", "criteria_met": True}
@@ -349,7 +343,6 @@ class TestHealthBenchRubricMeasure:
         )
 
     async def test_legacy_false_fallback_includes_terminal_failure(self) -> None:
-        """Compatibility fallback preserves the final failed-attempt diagnostic."""
         client = _make_judge()
         client.a_generate.side_effect = [
             RuntimeError("temporary outage"),
@@ -370,7 +363,6 @@ class TestHealthBenchRubricMeasure:
         assert "terminal worker outage" in result["explanation"]
 
     async def test_custom_attempt_count_controls_legacy_false_fallback(self) -> None:
-        """The compatibility fallback makes exactly the configured total attempts."""
         client = _make_judge()
         client.a_generate.return_value = "always bad json"
 
@@ -388,7 +380,6 @@ class TestHealthBenchRubricMeasure:
         assert client.a_generate.await_count == 4
 
     async def test_transient_request_and_parse_failures_recover(self) -> None:
-        """A request error and invalid response do not prevent a later verdict."""
         client = _make_judge()
         client.a_generate.side_effect = [
             RuntimeError("temporary request failure"),
@@ -411,7 +402,6 @@ class TestHealthBenchRubricMeasure:
     async def test_retry_waits_use_exponential_delays_outside_semaphore(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Backoff releases the shared judge slot before waiting to retry."""
         client = _make_judge()
         client.a_generate.return_value = "not valid json"
         semaphore = asyncio.Semaphore(1)
@@ -444,7 +434,6 @@ class TestHealthBenchRubricMeasure:
     async def test_grade_with_retry_rejects_invalid_retry_settings(
         self, max_attempts: int, retry_delay_s: float
     ) -> None:
-        """The retry helper rejects values that cannot define a retry policy."""
         client = _make_judge()
 
         with pytest.raises(ValueError):
@@ -460,7 +449,6 @@ class TestHealthBenchRubricMeasure:
     async def test_shared_semaphore_caps_concurrency_across_deepeval_copies(
         self,
     ) -> None:
-        """DeepEval copies together cannot exceed the configured judge limit."""
         active = 0
         peak_active = 0
 
