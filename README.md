@@ -56,6 +56,18 @@ mise trust          # Required on first clone — trusts mise.toml config
 mise run sync       # Installs Python 3.12 + deps via mise/uv
 ```
 
+#### Use the bundled Codex skill
+
+This repository includes a repo-scoped [`$coeval` skill](.agents/skills/coeval/SKILL.md). Start Codex from anywhere inside the repository, then type `$coeval` to invoke it or run `/skills` to find it. No separate skill installation is required.
+
+```text
+$coeval set up this repository and run a 5-sample smoke test
+$coeval run healthbench_consensus on 10% of the data with a gpt-4.1 judge
+$coeval audit evaluation_outputs/YYYY-MM-DD/HH-MM-SS
+```
+
+Codex discovers repository skills automatically. If the skill does not appear after pulling the repository, restart Codex. See the [OpenAI Skills documentation](https://learn.chatgpt.com/docs/build-skills) for details.
+
 ### 2. Serve your model
 
 > **Note:** [sglang-gravity](https://github.com/trillion-labs/sglang-gravity) is included by default for serving Gravity MoE models locally. If you already have an OpenAI-compatible endpoint running (vLLM, OpenAI, Azure, etc.), skip this step.
