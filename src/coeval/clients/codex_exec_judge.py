@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -161,6 +162,12 @@ class CodexExecJudge(DeepEvalBaseLLM):
                 _, stderr = await asyncio.wait_for(
                     proc.communicate(payload), timeout=self.timeout
                 )
+            except asyncio.CancelledError:
+                if proc.returncode is None:
+                    with suppress(ProcessLookupError):
+                        proc.kill()
+                    await proc.wait()
+                raise
             except TimeoutError:
                 proc.kill()
                 await proc.wait()

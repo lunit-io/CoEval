@@ -32,17 +32,30 @@ class _FakeProc:
     simulates the observed failure mode where it exits 0 having written nothing.
     """
 
-    def __init__(self, argv, returncode=0, stderr=b"", output=VALID_OUTPUT, hang=False):
+    def __init__(
+        self,
+        argv,
+        returncode=0,
+        stderr=b"",
+        output=VALID_OUTPUT,
+        hang=False,
+        process_exits_before_kill=False,
+    ):
         self._argv = argv
-        self.returncode = returncode
+        self._configured_returncode = returncode
+        self.returncode = None
         self._stderr = stderr
         self._output = output
         self._hang = hang
+        self._process_exits_before_kill = process_exits_before_kill
         self.killed = False
+        self.waited = False
         self.stdin_payload = None
+        self.started = asyncio.Event()
 
     async def communicate(self, payload=None):
         self.stdin_payload = payload
+        self.started.set()
         if self._hang:
             await asyncio.sleep(3600)
         out_path = Path(self._argv[self._argv.index("-o") + 1])
@@ -50,12 +63,18 @@ class _FakeProc:
             out_path.unlink(missing_ok=True)
         else:
             out_path.write_text(self._output)
+        self.returncode = self._configured_returncode
         return b"", self._stderr
 
     def kill(self):
         self.killed = True
+        if self._process_exits_before_kill:
+            self.returncode = self._configured_returncode
+            raise ProcessLookupError
 
     async def wait(self):
+        self.waited = True
+        self.returncode = self._configured_returncode
         return self.returncode
 
 
@@ -117,6 +136,37 @@ async def test_timeout_kills_process_and_raises(spawn) -> None:
     with pytest.raises(RuntimeError, match="timed out"):
         await CodexExecJudge(timeout=0.05).a_generate("grade this")
     assert state["proc"].killed is True
+    assert state["proc"].waited is True
+
+
+async def test_cancellation_kills_and_reaps_process(spawn) -> None:
+    """Cancelling a live judge call must not orphan its subprocess."""
+    state = spawn(hang=True)
+    task = asyncio.create_task(CodexExecJudge().a_generate("grade this"))
+    await asyncio.sleep(0)
+    await state["proc"].started.wait()
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert state["proc"].killed is True
+    assert state["proc"].waited is True
+
+
+async def test_cancellation_preserves_cancelled_error_when_child_exits(spawn) -> None:
+    """A child-exit race must not replace the caller's cancellation."""
+    state = spawn(hang=True, process_exits_before_kill=True)
+    task = asyncio.create_task(CodexExecJudge().a_generate("grade this"))
+    await asyncio.sleep(0)
+    await state["proc"].started.wait()
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert state["proc"].killed is True
+    assert state["proc"].waited is True
 
 
 async def test_bubblewrap_warning_on_stderr_still_succeeds(spawn) -> None:

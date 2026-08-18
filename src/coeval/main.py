@@ -131,6 +131,12 @@ def main(cfg: DictConfig) -> None:
             if cfg.runner.output_dir:
                 save_combined_summary(summaries)
 
+        if not summaries or sum(s.num_evaluated for s in summaries) == 0:
+            console.error(
+                "Evaluation failed: no samples completed inference and scoring"
+            )
+            sys.exit(1)
+
     except Exception as e:
         console.error(str(e))
         logger.exception("Evaluation failed")

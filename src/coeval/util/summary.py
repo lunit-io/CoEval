@@ -35,12 +35,16 @@ def save_combined_summary(summaries: list[EvalSummary]) -> Path | None:
         "num_datasets": len(summaries),
         "total_samples": sum(s.num_samples for s in summaries),
         "total_passed": sum(s.num_passed for s in summaries),
+        "total_inference_failed": sum(s.num_inference_failed for s in summaries),
+        "total_scoring_failed": sum(s.num_scoring_failed for s in summaries),
         "total_time_s": round(sum(s.total_time_s for s in summaries), 2),
         "metric_scores": {name: fmean(scores) for name, scores in all_metrics.items()},
         "per_dataset": {
             s.dataset: {
                 "num_samples": s.num_samples,
                 "num_passed": s.num_passed,
+                "num_inference_failed": s.num_inference_failed,
+                "num_scoring_failed": s.num_scoring_failed,
                 "total_time_s": round(s.total_time_s, 2),
                 "metric_scores": {k: v.score for k, v in s.metric_scores.items()},
             }

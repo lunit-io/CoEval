@@ -178,6 +178,10 @@ class _Metric:
     __name__ = "metric"
 
 
+class _OtherMetric:
+    __name__ = "other metric"
+
+
 def _run_dataset(num_samples: int) -> SimpleNamespace:
     def build_test_cases(predictions: list[str]) -> list[LLMTestCase]:
         return [
@@ -224,6 +228,18 @@ def _capture_built_results(
 
 
 @pytest.mark.asyncio
+async def test_run_rejects_empty_metrics_before_inference() -> None:
+    """A missing metric configuration must fail before spending an inference call."""
+    client = _SequencedClient(["unused"])
+    runner = EvalRunner(client=client)
+
+    with pytest.raises(ValueError, match="at least one metric"):
+        await runner.run(_run_dataset(1), [], avg_aggregator)
+
+    assert client.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_run_skips_failed_inference_cases_during_judge_evaluation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -247,7 +263,7 @@ async def test_run_skips_failed_inference_cases_during_judge_evaluation(
 
     monkeypatch.setattr("coeval.core.runner.evaluate", evaluate_scorable)
 
-    summary = await runner.run(_run_dataset(2), [_Metric], avg_aggregator)
+    summary = await runner.run(_run_dataset(2), [_Metric()], avg_aggregator)
 
     assert evaluated_ids == [1]
     assert [result.sample_id for result in captured] == [0, 1]
@@ -274,7 +290,7 @@ async def test_run_does_not_call_judge_when_all_inferences_fail(
 
     monkeypatch.setattr("coeval.core.runner.evaluate", evaluate_must_not_run)
 
-    summary = await runner.run(_run_dataset(2), [_Metric], avg_aggregator)
+    summary = await runner.run(_run_dataset(2), [_Metric()], avg_aggregator)
 
     assert [result.sample_id for result in captured] == [0, 1]
     assert all(result.inference_failed for result in captured)
@@ -307,7 +323,7 @@ def test_build_eval_results_marks_only_judge_failures_as_scoring_failed() -> Non
     results = runner._build_eval_results(
         [_test_case(10), _test_case(20), _test_case(30)],
         [_metadata(10), _metadata(20, inference_failed=True), _metadata(30)],
-        [_Metric],
+        [_Metric()],
         {
             10: [MetricScore(name="metric", score=1.0, success=True)],
             30: [MetricScore(name="metric", score=None, success=False)],
@@ -315,6 +331,37 @@ def test_build_eval_results_marks_only_judge_failures_as_scoring_failed() -> Non
     )
 
     assert [result.scoring_failed for result in results] == [False, False, True]
+
+
+@pytest.mark.parametrize(
+    ("metrics", "scores"),
+    [
+        ([_Metric()], []),
+        (
+            [_Metric(), _OtherMetric()],
+            [MetricScore(name="metric", score=1.0, success=True)],
+        ),
+        (
+            [_Metric()],
+            [MetricScore(name="unexpected", score=1.0, success=True)],
+        ),
+    ],
+)
+def test_build_eval_results_requires_exact_configured_metric_set(
+    metrics: list[object], scores: list[MetricScore]
+) -> None:
+    """Missing or unexpected judge metrics must fail closed."""
+    runner = EvalRunner(client=_SequencedClient(["unused"]))
+
+    result = runner._build_eval_results(
+        [_test_case(10)],
+        [_metadata(10)],
+        metrics,
+        {10: scores},
+    )[0]
+
+    assert result.scoring_failed is True
+    assert result.passed is False
 
 
 def _eval_result(
@@ -362,6 +409,32 @@ def test_summary_and_schema_exclude_scoring_failures_from_pass_rate() -> None:
     assert summary.pass_rate == 1.0
     assert summary.scoring_failure_rate == pytest.approx(1 / 3)
     assert summary.to_dict()["num_scoring_failed"] == 1
+
+
+def test_summary_excludes_partial_metric_sets_from_all_aggregates() -> None:
+    """A partially scored row must not leak into any metric denominator."""
+    runner = EvalRunner(client=_SequencedClient(["unused"]))
+    results = runner._build_eval_results(
+        [_test_case(0), _test_case(1), _test_case(2)],
+        [_metadata(0), _metadata(1), _metadata(2)],
+        [_Metric(), _OtherMetric()],
+        {
+            0: [
+                MetricScore(name="metric", score=1.0, success=True),
+                MetricScore(name="other metric", score=1.0, success=True),
+            ],
+            1: [MetricScore(name="metric", score=0.0, success=True)],
+            2: [MetricScore(name="unexpected", score=1.0, success=True)],
+        },
+    )
+
+    summary = runner._build_summary(results, "mixed", 3.0, avg_aggregator)
+
+    assert [result.scoring_failed for result in results] == [False, True, True]
+    assert set(summary.metric_scores) == {"metric", "other metric"}
+    assert summary.metric_scores["metric"].score == 1.0
+    assert summary.metric_scores["metric"].denominator == 1.0
+    assert summary.metric_scores["other metric"].denominator == 1.0
 
 
 def _summary(

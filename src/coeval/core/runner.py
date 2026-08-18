@@ -215,11 +215,28 @@ class EvalRunner:
         for tc, meta in zip(test_cases, metadata_list, strict=True):
             metric_results = self._score_test_case(tc, meta, metrics, eval_lookup)
             top_level_scores = eval_lookup.get(meta["sample_id"])
+            expected_metric_names = sorted(metric.__name__ for metric in metrics)
+            returned_metric_names = sorted(
+                score.name for score in (top_level_scores or [])
+            )
+            metric_set_mismatch = (
+                top_level_scores is not None
+                and returned_metric_names != expected_metric_names
+            )
+            if not meta["inference_failed"] and metric_set_mismatch:
+                logger.error(
+                    "Incomplete eval result for sample_id=%s: expected metrics=%s, "
+                    "returned metrics=%s",
+                    meta["sample_id"],
+                    expected_metric_names,
+                    returned_metric_names,
+                )
             scoring_failed = (
                 not meta["inference_failed"]
                 and bool(metrics)
                 and (
                     top_level_scores is None
+                    or metric_set_mismatch
                     or any(score.score is None for score in top_level_scores)
                 )
             )
@@ -251,7 +268,7 @@ class EvalRunner:
         ]
         n = len(results)
 
-        aggregation_result = score_aggregator(results)
+        aggregation_result = score_aggregator(fully_scored)
 
         return EvalSummary(
             dataset=dataset_name,
@@ -283,6 +300,9 @@ class EvalRunner:
             score_aggregator: Function to aggregate metric scores.
             dataset_name: Override for dataset.name (used for file naming).
         """
+        if not metrics:
+            raise ValueError("Evaluation requires at least one metric")
+
         name = dataset_name or dataset.name
         self._enable_json_mode(metrics)
         console.start_eval(len(dataset.goldens), name)
