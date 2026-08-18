@@ -5,7 +5,7 @@
 #   mise run eval -- client.llm.config.api_base=http://shared-cluster-vm-026:9006/v1 \
 #                    client.llm.config.model=your-model
 
-system_prompt: "You are Chain-of-Evidence, a medical AI assistant developed by Lunit"
+system_prompt: "You are Chain-of-Evidence"
 
 client:
   _target_: coeval.clients.PassthroughClient
@@ -18,7 +18,7 @@ client:
       model: lunit-hackathon
       api_key: ${oc.env:OPENAI_API_KEY,null}
       temperature: 0.0
-      max_retries: 0
+      max_retries: 3
       # Avoid truncating long-form HealthBench answers.
       max_tokens: 32768
       timeout: 360.0
