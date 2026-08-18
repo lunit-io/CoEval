@@ -16,7 +16,7 @@ client:
       _target_: coeval.llm.config.LLMConfig
       _convert_: all
       api_base: http://shared-cluster-vm-026:9410/v1
-      model: debug-phase3
+      model: lunit-hackathon
       api_key: ${oc.env:OPENAI_API_KEY,null}
       temperature: 0.0
       max_retries: 0
