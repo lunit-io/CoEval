@@ -56,6 +56,18 @@ mise trust          # Required on first clone — trusts mise.toml config
 mise run sync       # Installs Python 3.12 + deps via mise/uv
 ```
 
+#### Use the bundled Codex skill
+
+This repository includes a repo-scoped [`$coeval` skill](.agents/skills/coeval/SKILL.md). Start Codex from anywhere inside the repository, then type `$coeval` to invoke it or run `/skills` to find it. No separate skill installation is required.
+
+```text
+$coeval set up this repository and run a 5-sample smoke test
+$coeval run healthbench_consensus on 10% of the data with a gpt-4.1 judge
+$coeval audit evaluation_outputs/YYYY-MM-DD/HH-MM-SS
+```
+
+Codex discovers repository skills automatically. If the skill does not appear after pulling the repository, restart Codex. See the [OpenAI Skills documentation](https://learn.chatgpt.com/docs/build-skills) for details.
+
 ### 2. Serve your model
 
 > **Note:** [sglang-gravity](https://github.com/trillion-labs/sglang-gravity) is included by default for serving Gravity MoE models locally. If you already have an OpenAI-compatible endpoint running (vLLM, OpenAI, Azure, etc.), skip this step.
@@ -91,7 +103,7 @@ mise run eval -- datasets=medqa
 mise run eval -- datasets=all
 
 # Custom endpoint (if not using mise run serve)
-mise run eval -- client.api_base=http://localhost:8000/v1 client.model=your-model datasets=all
+mise run eval -- client.api_base=http://shared-cluster-vm-026:9006/v1 client.model=your-model datasets=all
 ```
 
 
@@ -117,6 +129,9 @@ Then run:
 ```bash
 # Run HealthBench — your model generates responses, gpt-4.1 grades them
 mise run eval -- datasets=healthbench_consensus
+
+# Full HealthBench (5,000 examples) — smoke-test with num_samples first
+mise run eval -- datasets=healthbench_main num_samples=5
 ```
 
 > **Note:** `OPENAI_API_KEY` is used for both the model server and the judge model. Most MCQ datasets (MedQA, MedMCQA, etc.) use deterministic scoring and do **not** require a judge model.
@@ -154,8 +169,11 @@ All datasets are evaluated as **MCQ (multiple-choice question)** unless noted ot
 | [MedHallu](https://huggingface.co/datasets/UTAustin-AIHealth/MedHallu) | `medhallu` | Hallucination detection | Binary classification | Macro F1 |
 | [MedCalc](https://huggingface.co/datasets/ncbi/MedCalc-Bench) | `medcalc` | Clinical calculation | Open-ended numeric | Numeric Accuracy |
 | [PubMedQA](https://huggingface.co/datasets/qiaojin/PubMedQA) | `pubmedqa` | PubMed abstracts | 3-option MCQ (Yes/No/Maybe) | MCQ Accuracy |
+| [HealthBench](https://huggingface.co/datasets/openai/HealthBench) | `healthbench_main` | OpenAI | Open-ended multi-turn | LLM-as-judge (rubric) |
 | [HealthBench](https://huggingface.co/datasets/openai/HealthBench) | `healthbench_consensus` | OpenAI | Open-ended multi-turn | LLM-as-judge (rubric) |
 | [AttributionBench](https://huggingface.co/datasets/osunlp/AttributionBench) | `attributionbench` | OSU NLP | Binary classification | Macro F1 |
+
+> `healthbench_main` is the headline 5,000-example benchmark; `healthbench_consensus` is a physician-validated slice of it. `datasets=all` deliberately excludes `healthbench_main` — 5,000 examples × many rubric criteria each would make a quick run ruinously slow and expensive.
 
 ```bash
 mise run eval -- datasets=medqa              # Single dataset
@@ -216,7 +234,26 @@ mise run eval -- datasets=medqa num_samples=100 client.temperature=0.3
 mise run eval -- 'system_prompt="Answer concisely."'
 
 # Swap judge model for HealthBench
-mise run eval -- datasets=healthbench_consensus datasets/metrics/judge@healthbench_judge=gpt-4.1
+mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-4.1
+
+# Point gpt-4.1 at a compatible endpoint instead of OpenAI
+OPENAI_API_BASE=http://shared-cluster-vm-026:9002/v1 \
+  mise run eval -- datasets=healthbench_main datasets/metrics/judge@healthbench_judge=gpt-4.1
+
+# Grade with gpt-5.6-sol through headless `codex exec` (codex-cli >= 0.146.0).
+# This path needs NO OPENAI_API_KEY at eval time — Codex uses its own stored
+# credentials. Authenticate the host once, then keep concurrency modest because
+# each grading call is a process, not an HTTP request:
+#   codex login                                          # ChatGPT subscription
+#   printenv OPENAI_API_KEY | codex login --with-api-key # or an API key
+mise run eval -- datasets=healthbench_main \
+  datasets/metrics/judge@healthbench_judge=gpt-5.6-sol \
+  metrics.healthbench_main.healthbench_rubric.concurrent_limit=4
+
+# Reasoning effort defaults to high; dial it down for cheaper grading
+mise run eval -- datasets=healthbench_main \
+  datasets/metrics/judge@healthbench_judge=gpt-5.6-sol \
+  '++healthbench_judge.reasoning_effort=low'
 ```
 
 ---

@@ -164,6 +164,10 @@ class TestParseGradingResponse:
         text = '{"explanation": "ok", "criteria_met": "true"}'
         assert parse_grading_response(text) is None
 
+    @pytest.mark.parametrize("response", [None, 123, {"criteria_met": True}])
+    def test_non_string_response_returns_none(self, response: object) -> None:
+        assert parse_grading_response(response) is None
+
 
 # ---------------------------------------------------------------------------
 # avg_aggregator tests for HealthBench scoring

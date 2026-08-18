@@ -6,7 +6,7 @@ Each example contains multi-turn conversation prompts with rubric items
 for LLM-as-judge grading.
 
 Available subsets:
-    - Full: 5,000 examples with diverse rubric criteria
+    - Main: 5,000 examples (``oss_eval``) — the headline HealthBench eval
     - Consensus: 3,671 examples with 34 consensus criteria
 
 Reference:
@@ -29,6 +29,7 @@ from coeval.datasets.base import MultiTurnDatasetBase
 
 logger = logging.getLogger(__name__)
 
+MAIN_URL = "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/2025-05-07-06-14-12_oss_eval.jsonl"
 CONSENSUS_URL = "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/consensus_2025-05-09-20-00-46.jsonl"
 _CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "coeval"
 
@@ -185,6 +186,27 @@ class _HealthBenchDatasetBase(MultiTurnDatasetBase):
                 "prompt_id": prompt_id,
             },
         )
+
+
+@register_dataset("healthbench_main")
+class HealthBenchMainDataset(_HealthBenchDatasetBase):
+    """HealthBench main subset (``oss_eval``, 5,000 examples).
+
+    The headline HealthBench eval. Consensus and Hard are both slices of it, but
+    they overlap on 586 prompts and cover only 4,085/5,000 together, so running
+    those is not a substitute for this.
+
+    Rubrics mix positive and negative (penalty) point criteria, so a per-example
+    score can go net-negative; the reported metric clips the mean to [0, 1]
+    (see :func:`coeval.util.aggregation.clipped_avg_aggregator`).
+    """
+
+    _URL = MAIN_URL
+    _LABEL = "Main"
+
+    @property
+    def name(self) -> str:
+        return "HealthBenchMain"
 
 
 @register_dataset("healthbench_consensus")

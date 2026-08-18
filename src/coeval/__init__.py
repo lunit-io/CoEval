@@ -10,8 +10,12 @@ Usage (CLI):
 Usage (Python):
     from coeval import EvalRunner
     from coeval.clients import PassthroughClient
+    from coeval.llm import LLMConfig, create_llm_client
 
-    client = PassthroughClient(api_base="http://localhost:8000/v1", model="your-model")
+    llm = create_llm_client(
+        LLMConfig(api_base="http://shared-cluster-vm-026:9006/v1", model="your-model")
+    )
+    client = PassthroughClient(llm=llm)
     runner = EvalRunner(client=client)
     summary = await runner.run(dataset, metrics, aggregator)
 """

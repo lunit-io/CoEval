@@ -1,14 +1,17 @@
 """Tests for HealthBench rubric grading metric."""
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from deepeval.metrics.utils import copy_metrics
 from deepeval.test_case import ConversationalTestCase, Turn
 
 from coeval.metrics.healthbench_rubric import (
     GRADER_TEMPLATE,
     HealthBenchRubricMetric,
+    grade_with_retry,
 )
 
 # ---------------------------------------------------------------------------
@@ -91,6 +94,27 @@ class TestHealthBenchRubricMetricInit:
         client = _make_judge()
         metric = HealthBenchRubricMetric(judge=client, concurrent_limit=5)
         assert metric.concurrent_limit == 5
+
+    @pytest.mark.parametrize(
+        ("max_attempts", "retry_delay_s"),
+        [(0, 1.0), (1, -0.1)],
+    )
+    def test_invalid_retry_settings_are_rejected(
+        self, max_attempts: int, retry_delay_s: float
+    ) -> None:
+        with pytest.raises(ValueError):
+            HealthBenchRubricMetric(
+                judge=_make_judge(),
+                max_attempts=max_attempts,
+                retry_delay_s=retry_delay_s,
+            )
+
+    def test_deepeval_metric_copies_reuse_the_shared_semaphore(self) -> None:
+        metric = HealthBenchRubricMetric(judge=_make_judge(), concurrent_limit=2)
+
+        copies = [copy_metrics([metric])[0] for _ in range(3)]
+
+        assert all(copy._semaphore is metric._semaphore for copy in copies)
 
 
 # ---------------------------------------------------------------------------
@@ -207,18 +231,254 @@ class TestHealthBenchRubricMeasure:
         assert client.a_generate.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_fallback_after_max_retries(self) -> None:
-        """After max retries, criteria_met defaults to False."""
+    async def test_exhausted_retries_raise_and_leave_metric_unscored(self) -> None:
         client = _make_judge()
         client.a_generate.return_value = "always bad json"
-        metric = HealthBenchRubricMetric(judge=client)
+        metric = HealthBenchRubricMetric(
+            judge=client,
+            max_attempts=2,
+            retry_delay_s=0,
+        )
         test_case = _make_test_case(
             rubrics=[{"criterion": "c1", "points": 1.0, "tags": []}]
         )
 
-        score = await metric.a_measure(test_case)
-        # Falls back to criteria_met=False -> 0/1 = 0.0
-        assert score == pytest.approx(0.0)
+        with pytest.raises(RuntimeError, match="after 2 attempts"):
+            await metric.a_measure(test_case)
+
+        assert client.a_generate.await_count == 2
+        assert metric.score is None
+        assert metric.error is not None
+
+    async def test_exhausted_request_errors_preserve_terminal_diagnostic(
+        self,
+    ) -> None:
+        client = _make_judge()
+        client.a_generate.side_effect = [
+            RuntimeError("first worker failure"),
+            RuntimeError("No available workers"),
+        ]
+        metric = HealthBenchRubricMetric(
+            judge=client,
+            max_attempts=2,
+            retry_delay_s=0,
+        )
+        test_case = _make_test_case(
+            rubrics=[{"criterion": "c1", "points": 1.0, "tags": []}]
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await metric.a_measure(test_case)
+
+        assert "No available workers" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, RuntimeError)
+        assert str(exc_info.value.__cause__) == "No available workers"
+        assert metric.error is not None
+        assert "No available workers" in metric.error
+        assert client.a_generate.await_count == 2
+
+    async def test_criterion_failure_cancels_and_drains_sibling_tasks(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        metric = HealthBenchRubricMetric(
+            judge=_make_judge(),
+            max_attempts=1,
+            retry_delay_s=0,
+        )
+        failure = RuntimeError("rubric exhausted")
+        slow_started = asyncio.Event()
+        slow_cancelled = asyncio.Event()
+        release_slow = asyncio.Event()
+
+        async def grade_item(_convo: str, rubric: dict) -> dict:
+            if rubric["criterion"] == "slow":
+                slow_started.set()
+                try:
+                    await release_slow.wait()
+                except asyncio.CancelledError:
+                    slow_cancelled.set()
+                    raise
+                return {"explanation": "late", "criteria_met": True}
+            await slow_started.wait()
+            raise failure
+
+        monkeypatch.setattr(metric, "_grade_rubric_item", grade_item)
+        test_case = _make_test_case(
+            rubrics=[
+                {"criterion": "slow", "points": 1.0, "tags": []},
+                {"criterion": "failing", "points": 1.0, "tags": []},
+            ]
+        )
+
+        try:
+            with pytest.raises(RuntimeError) as exc_info:
+                await metric.a_measure(test_case)
+
+            assert exc_info.value is failure
+            assert slow_cancelled.is_set()
+        finally:
+            release_slow.set()
+            await asyncio.sleep(0)
+
+    async def test_grade_with_retry_accepts_legacy_positional_arguments(self) -> None:
+        client = _make_judge()
+        client.a_generate.return_value = json.dumps(
+            {"explanation": "ok", "criteria_met": True}
+        )
+
+        result = await grade_with_retry(
+            client,
+            asyncio.Semaphore(1),
+            "grade this",
+            "criterion",
+            "false",
+            "legacy system prompt",
+            max_attempts=1,
+            retry_delay_s=0,
+        )
+
+        assert result == {"explanation": "ok", "criteria_met": True}
+        client.a_generate.assert_awaited_once_with(
+            "grade this", system_prompt="legacy system prompt"
+        )
+
+    async def test_legacy_false_fallback_includes_terminal_failure(self) -> None:
+        client = _make_judge()
+        client.a_generate.side_effect = [
+            RuntimeError("temporary outage"),
+            RuntimeError("terminal worker outage"),
+        ]
+
+        result = await grade_with_retry(
+            model=client,
+            semaphore=asyncio.Semaphore(1),
+            prompt="grade this",
+            context_label="criterion",
+            on_failure="false",
+            max_attempts=2,
+            retry_delay_s=0,
+        )
+
+        assert result["criteria_met"] is False
+        assert "terminal worker outage" in result["explanation"]
+
+    async def test_custom_attempt_count_controls_legacy_false_fallback(self) -> None:
+        client = _make_judge()
+        client.a_generate.return_value = "always bad json"
+
+        result = await grade_with_retry(
+            model=client,
+            semaphore=asyncio.Semaphore(1),
+            prompt="grade this",
+            context_label="criterion",
+            max_attempts=4,
+            retry_delay_s=0,
+            on_failure="false",
+        )
+
+        assert result["criteria_met"] is False
+        assert client.a_generate.await_count == 4
+
+    async def test_transient_request_and_parse_failures_recover(self) -> None:
+        client = _make_judge()
+        client.a_generate.side_effect = [
+            RuntimeError("temporary request failure"),
+            "not valid json",
+            json.dumps({"explanation": "recovered", "criteria_met": True}),
+        ]
+
+        result = await grade_with_retry(
+            model=client,
+            semaphore=asyncio.Semaphore(1),
+            prompt="grade this",
+            context_label="criterion",
+            max_attempts=3,
+            retry_delay_s=0,
+        )
+
+        assert result == {"explanation": "recovered", "criteria_met": True}
+        assert client.a_generate.await_count == 3
+
+    async def test_retry_waits_use_exponential_delays_outside_semaphore(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = _make_judge()
+        client.a_generate.return_value = "not valid json"
+        semaphore = asyncio.Semaphore(1)
+        delays: list[float] = []
+
+        async def record_sleep(delay: float) -> None:
+            assert not semaphore.locked()
+            delays.append(delay)
+
+        monkeypatch.setattr(
+            "coeval.metrics.healthbench_rubric.asyncio.sleep", record_sleep
+        )
+
+        await grade_with_retry(
+            model=client,
+            semaphore=semaphore,
+            prompt="grade this",
+            context_label="criterion",
+            max_attempts=3,
+            retry_delay_s=0.25,
+            on_failure="false",
+        )
+
+        assert delays == [0.25, 0.5]
+
+    @pytest.mark.parametrize(
+        ("max_attempts", "retry_delay_s"),
+        [(0, 1.0), (1, -0.1)],
+    )
+    async def test_grade_with_retry_rejects_invalid_retry_settings(
+        self, max_attempts: int, retry_delay_s: float
+    ) -> None:
+        client = _make_judge()
+
+        with pytest.raises(ValueError):
+            await grade_with_retry(
+                model=client,
+                semaphore=asyncio.Semaphore(1),
+                prompt="grade this",
+                context_label="criterion",
+                max_attempts=max_attempts,
+                retry_delay_s=retry_delay_s,
+            )
+
+    async def test_shared_semaphore_caps_concurrency_across_deepeval_copies(
+        self,
+    ) -> None:
+        active = 0
+        peak_active = 0
+
+        async def grade_slowly(*_args, **_kwargs) -> str:
+            nonlocal active, peak_active
+            active += 1
+            peak_active = max(peak_active, active)
+            try:
+                await asyncio.sleep(0)
+                return json.dumps({"explanation": "ok", "criteria_met": True})
+            finally:
+                active -= 1
+
+        client = _make_judge()
+        client.a_generate.side_effect = grade_slowly
+        metric = HealthBenchRubricMetric(judge=client, concurrent_limit=2)
+        metric_copies = [copy_metrics([metric])[0] for _ in range(4)]
+
+        await asyncio.gather(
+            *[
+                metric_copy.a_measure(
+                    _make_test_case(
+                        rubrics=[{"criterion": "c1", "points": 1.0, "tags": []}]
+                    )
+                )
+                for metric_copy in metric_copies
+            ]
+        )
+
+        assert peak_active == 2
 
     @pytest.mark.asyncio
     async def test_details_contain_rubric_grades(self) -> None:

@@ -12,7 +12,7 @@ class LLMConfig:
     """Immutable configuration for LLM client.
 
     Attributes:
-        api_base: Base URL for the LLM API (e.g., http://localhost:8001/v1).
+        api_base: Base URL for the LLM API (e.g., http://shared-cluster-vm-026:9006/v1).
         model: Model name/identifier to use.
         api_key: API key for authentication. None disables api key authentication.
         temperature: Sampling temperature (0.0 = deterministic).

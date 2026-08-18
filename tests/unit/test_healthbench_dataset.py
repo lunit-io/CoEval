@@ -1,4 +1,4 @@
-"""Tests for HealthBench Consensus dataset loader."""
+"""Tests for HealthBench dataset loaders."""
 
 import json
 from unittest.mock import MagicMock, patch
@@ -7,7 +7,10 @@ import pytest
 from deepeval.dataset import ConversationalGolden
 from deepeval.test_case import ConversationalTestCase
 
-from coeval.datasets.healthbench import HealthBenchConsensusDataset
+from coeval.datasets.healthbench import (
+    HealthBenchConsensusDataset,
+    HealthBenchMainDataset,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -219,6 +222,33 @@ class TestHealthBenchConsensusDataset:
         assert "system_prompt" in tc.additional_metadata
         assert tc.additional_metadata["_sample_id"] == 0
 
+    @patch("coeval.datasets.healthbench.urllib.request.urlopen")
+    def test_build_test_cases_copies_effective_system_prompt(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.read.return_value = _mock_jsonl_response(
+            [_make_sample(prompt=[{"role": "user", "content": "Hello"}])]
+        )
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        effective_prompt = "You are a careful medical assistant."
+        dataset = HealthBenchConsensusDataset(system_prompt=effective_prompt)
+        golden = dataset.goldens[0]
+
+        assert golden.additional_metadata["system_prompt"] is None
+        assert dataset.get_generation_input(golden)[0] == {
+            "role": "system",
+            "content": effective_prompt,
+        }
+
+        test_case = dataset.build_test_cases(["Test response"])[0]
+
+        assert test_case.additional_metadata["system_prompt"] == effective_prompt
+        assert golden.additional_metadata["system_prompt"] is None
+
     # -----------------------------------------------------------------------
     # Stratified sampling tests
     # -----------------------------------------------------------------------
@@ -410,3 +440,69 @@ class TestHealthBenchConsensusDataset:
         assert golden.turns[1].role == "assistant"
         assert golden.turns[2].role == "user"
         assert golden.turns[2].content == "Can I eat fruit?"
+
+
+def _mock_urlopen(mock_urlopen: MagicMock, samples: list[dict]) -> None:
+    mock_response = MagicMock()
+    mock_response.read.return_value = _mock_jsonl_response(samples)
+    mock_response.__enter__ = lambda s: s
+    mock_response.__exit__ = MagicMock(return_value=False)
+    mock_urlopen.return_value = mock_response
+
+
+# ---------------------------------------------------------------------------
+# HealthBench Main (oss_eval) tests
+# ---------------------------------------------------------------------------
+
+
+class TestHealthBenchMainDataset:
+    @pytest.fixture(autouse=True)
+    def no_cache(self, tmp_path):
+        with patch(
+            "coeval.datasets.healthbench._CACHE_DIR",
+            tmp_path / "coeval_cache",
+        ):
+            yield
+
+    def test_points_at_oss_eval_blob(self) -> None:
+        assert HealthBenchMainDataset._URL.endswith(
+            "2025-05-07-06-14-12_oss_eval.jsonl"
+        )
+
+    @patch("coeval.datasets.healthbench.urllib.request.urlopen")
+    def test_loads_conversational_goldens(self, mock_urlopen: MagicMock) -> None:
+        _mock_urlopen(mock_urlopen, [_make_sample(f"id-{i}") for i in range(4)])
+        dataset = HealthBenchMainDataset()
+        assert len(dataset.goldens) == 4
+        assert isinstance(dataset.goldens[0], ConversationalGolden)
+        assert dataset.name == "HealthBenchMain"
+
+    @patch("coeval.datasets.healthbench.urllib.request.urlopen")
+    def test_preserves_penalty_rubrics(self, mock_urlopen: MagicMock) -> None:
+        sample = _make_sample(
+            prompt_id="penalty-001",
+            rubrics=[
+                {"criterion": "Accurate", "points": 5.0, "tags": ["accuracy"]},
+                {
+                    "criterion": "Overly verbose",
+                    "points": -2.0,
+                    "tags": ["cluster:concision"],
+                },
+            ],
+        )
+        _mock_urlopen(mock_urlopen, [sample])
+        rubrics = HealthBenchMainDataset().goldens[0].additional_metadata["rubrics"]
+        assert [r["points"] for r in rubrics] == [5.0, -2.0]
+
+
+class TestHealthBenchSubsetWiring:
+    def test_registry_names(self) -> None:
+        assert HealthBenchMainDataset._registry_name == "healthbench_main"
+        assert HealthBenchConsensusDataset._registry_name == "healthbench_consensus"
+
+    def test_exported_from_package(self) -> None:
+        import coeval.datasets as datasets_pkg
+
+        for name in ("HealthBenchMainDataset", "HealthBenchConsensusDataset"):
+            assert name in datasets_pkg.__all__
+            assert hasattr(datasets_pkg, name)

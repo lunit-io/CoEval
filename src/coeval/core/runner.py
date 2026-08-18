@@ -45,10 +45,19 @@ class EvalRunner:
         client: InferenceClient,
         concurrent_limit: int = 10,
         output_dir: str | None = None,
+        inference_max_attempts: int = 3,
+        inference_retry_delay_s: float = 1.0,
     ):
+        if inference_max_attempts < 1:
+            raise ValueError("inference_max_attempts must be at least 1")
+        if inference_retry_delay_s < 0:
+            raise ValueError("inference_retry_delay_s must be non-negative")
+
         self.client = client
         self.concurrent_limit = concurrent_limit
         self.output_dir = output_dir
+        self.inference_max_attempts = inference_max_attempts
+        self.inference_retry_delay_s = inference_retry_delay_s
         self.semaphore = asyncio.Semaphore(concurrent_limit)
 
     def _enable_json_mode(self, metrics: Sequence[BaseMetric]) -> None:
@@ -56,6 +65,32 @@ class EvalRunner:
         for metric in metrics:
             if hasattr(metric, "model") and hasattr(metric.model, "model_data"):
                 metric.model.model_data.supports_json = True
+
+    async def _generate_with_retry(self, messages: list[dict], sample_id: int) -> str:
+        last_error: Exception | None = None
+        for attempt in range(1, self.inference_max_attempts + 1):
+            try:
+                async with self.semaphore:
+                    result = await self.client.generate(messages)
+                return str(result) if result else ""
+            except Exception as error:
+                last_error = error
+                if attempt == self.inference_max_attempts:
+                    break
+                logger.warning(
+                    "Inference attempt %s/%s failed for sample %s: %s",
+                    attempt,
+                    self.inference_max_attempts,
+                    sample_id,
+                    error,
+                )
+                if self.inference_retry_delay_s:
+                    await asyncio.sleep(
+                        self.inference_retry_delay_s * 2 ** (attempt - 1)
+                    )
+
+        assert last_error is not None
+        raise last_error
 
     async def _generate_predictions(
         self,
@@ -75,9 +110,7 @@ class EvalRunner:
 
             try:
                 query = dataset.get_generation_input(golden)
-                async with self.semaphore:
-                    result = await self.client.generate(query)
-                    completion = str(result) if result else ""
+                completion = await self._generate_with_retry(query, idx)
             except Exception as e:
                 logger.error(f"Inference failed for sample {idx}: {e}")
                 completion, inference_error = "", str(e)
@@ -123,7 +156,7 @@ class EvalRunner:
             return [
                 MetricResult(
                     name=m.__name__,
-                    score=0.0,
+                    score=None,
                     passed=False,
                     reason="Skipped: inference failed",
                 )
@@ -137,7 +170,7 @@ class EvalRunner:
             return [
                 MetricResult(
                     name=m.__name__,
-                    score=0.0,
+                    score=None,
                     passed=False,
                     reason="Missing eval result",
                 )
@@ -177,19 +210,49 @@ class EvalRunner:
         eval_lookup: EvalLookup,
     ) -> list[EvalResult]:
         """Build EvalResult list from eval_lookup."""
-        return [
-            EvalResult(
-                sample_id=meta["sample_id"],
-                test_case=tc,
-                rationale=meta["rationale"],
-                metrics=self._score_test_case(tc, meta, metrics, eval_lookup),
-                generation_time_ms=meta["generation_time_ms"],
-                scoring_time_ms=0.0,
-                inference_failed=meta["inference_failed"],
-                inference_error=meta["inference_error"],
+        results: list[EvalResult] = []
+        for tc, meta in zip(test_cases, metadata_list, strict=True):
+            metric_results = self._score_test_case(tc, meta, metrics, eval_lookup)
+            top_level_scores = eval_lookup.get(meta["sample_id"])
+            expected_metric_names = sorted(metric.__name__ for metric in metrics)
+            returned_metric_names = sorted(
+                score.name for score in (top_level_scores or [])
             )
-            for tc, meta in zip(test_cases, metadata_list, strict=True)
-        ]
+            metric_set_mismatch = (
+                top_level_scores is not None
+                and returned_metric_names != expected_metric_names
+            )
+            if not meta["inference_failed"] and metric_set_mismatch:
+                logger.error(
+                    "Incomplete eval result for sample_id=%s: expected metrics=%s, "
+                    "returned metrics=%s",
+                    meta["sample_id"],
+                    expected_metric_names,
+                    returned_metric_names,
+                )
+            scoring_failed = (
+                not meta["inference_failed"]
+                and bool(metrics)
+                and (
+                    top_level_scores is None
+                    or metric_set_mismatch
+                    or any(score.score is None for score in top_level_scores)
+                )
+            )
+            results.append(
+                EvalResult(
+                    sample_id=meta["sample_id"],
+                    test_case=tc,
+                    rationale=meta["rationale"],
+                    metrics=metric_results,
+                    generation_time_ms=meta["generation_time_ms"],
+                    scoring_time_ms=0.0,
+                    inference_failed=meta["inference_failed"],
+                    inference_error=meta["inference_error"],
+                    scoring_failed=scoring_failed,
+                )
+            )
+        return results
 
     def _build_summary(
         self,
@@ -199,16 +262,19 @@ class EvalRunner:
         score_aggregator: ScoreAggregatorFn,
     ) -> EvalSummary:
         """Build summary statistics from evaluation results."""
-        successful = [r for r in results if not r.inference_failed]
+        fully_scored = [
+            r for r in results if not r.inference_failed and not r.scoring_failed
+        ]
         n = len(results)
 
-        aggregation_result = score_aggregator(results)
+        aggregation_result = score_aggregator(fully_scored)
 
         return EvalSummary(
             dataset=dataset_name,
             num_samples=n,
-            num_passed=sum(r.passed for r in successful),
-            num_inference_failed=n - len(successful),
+            num_passed=sum(r.passed for r in fully_scored),
+            num_inference_failed=sum(r.inference_failed for r in results),
+            num_scoring_failed=sum(r.scoring_failed for r in results),
             total_time_s=total_time,
             avg_generation_ms=sum(r.generation_time_ms for r in results) / n
             if n
@@ -233,6 +299,9 @@ class EvalRunner:
             score_aggregator: Function to aggregate metric scores.
             dataset_name: Override for dataset.name (used for file naming).
         """
+        if not metrics:
+            raise ValueError("Evaluation requires at least one metric")
+
         name = dataset_name or dataset.name
         self._enable_json_mode(metrics)
         console.start_eval(len(dataset.goldens), name)
@@ -241,10 +310,19 @@ class EvalRunner:
         predictions, metadata_list = await self._generate_predictions(dataset)
         test_cases = dataset.build_test_cases(predictions)
 
-        eval_lookup = evaluate(
-            test_cases=test_cases,
-            metrics=metrics,
-            max_concurrent=self.concurrent_limit,
+        scorable_test_cases = [
+            tc
+            for tc, metadata in zip(test_cases, metadata_list, strict=True)
+            if not metadata["inference_failed"]
+        ]
+        eval_lookup = (
+            evaluate(
+                test_cases=scorable_test_cases,
+                metrics=metrics,
+                max_concurrent=self.concurrent_limit,
+            )
+            if scorable_test_cases
+            else {}
         )
 
         results = self._build_eval_results(
@@ -259,6 +337,7 @@ class EvalRunner:
             summary.pass_rate,
             total_time,
             summary.num_inference_failed,
+            summary.num_scoring_failed,
         )
 
         if self.output_dir:

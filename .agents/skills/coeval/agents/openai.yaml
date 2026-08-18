@@ -1,0 +1,4 @@
+interface:
+  display_name: "CoEval"
+  short_description: "Run and audit reproducible medical LLM evaluations"
+  default_prompt: "Use $coeval to run a small, verified CoEval evaluation and report the exact configuration and artifacts."

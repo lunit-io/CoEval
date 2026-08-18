@@ -76,6 +76,34 @@ def avg_aggregator(
     return AggregationResult(metric_scores=metric_scores, breakdown=breakdown)
 
 
+def clipped_avg_aggregator(
+    results: list[EvalResult],
+    key_to_name: dict[str, str] | None = None,  # noqa: ARG001
+) -> AggregationResult:
+    """Simple average with the reported mean clipped to [0, 1].
+
+    The official HealthBench reporting metric, for subsets whose penalty criteria
+    can drive a per-example score (and so the mean) net-negative.
+
+    Wraps :func:`avg_aggregator` and clips each metric's ``score``.
+    ``numerator``/``denominator`` are rescaled to match it
+    (``numerator == score * denominator``) so a :func:`weighted_merge`
+    recomputing ``sum(num) / sum(den)`` cannot undo the clip.  ``breakdown`` and
+    the per-sample scores stay raw as diagnostics.
+    """
+    base = avg_aggregator(results)
+    clipped = AggregationResult(metric_scores={}, breakdown=dict(base.breakdown))
+    for name, detail in base.metric_scores.items():
+        score = min(1.0, max(0.0, detail.score))
+        den = detail.denominator
+        clipped.metric_scores[name] = MetricScoreDetail(
+            score=score,
+            numerator=(score * den) if den is not None else None,
+            denominator=den,
+        )
+    return clipped
+
+
 def weighted_avg_aggregator(
     results: list[EvalResult],
     key_to_name: dict[str, str] | None = None,  # noqa: ARG001
@@ -408,4 +436,5 @@ def merge_summaries(
         ),
         metric_scores=merged,
         num_inference_failed=sum(s.num_inference_failed for s in summaries),
+        num_scoring_failed=sum(s.num_scoring_failed for s in summaries),
     )

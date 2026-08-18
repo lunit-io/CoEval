@@ -831,12 +831,13 @@ class EvalConsole:
         pass_rate: float,
         time_s: float,
         num_inference_failed: int = 0,
+        num_scoring_failed: int = 0,
     ) -> None:
         """Print evaluation completion message with highlighted stats."""
         rate_style = (
             "green" if pass_rate >= 0.7 else "yellow" if pass_rate >= 0.5 else "red"
         )
-        num_evaluated = num_total - num_inference_failed
+        num_evaluated = num_total - num_inference_failed - num_scoring_failed
         msg = (
             f"[bold cyan]✓ Evaluation complete:[/bold cyan] "
             f"[bold {rate_style}]{num_passed}/{num_evaluated}[/bold {rate_style}] passed "
@@ -845,6 +846,8 @@ class EvalConsole:
         )
         if num_inference_failed > 0:
             msg += f" [bold red]({num_inference_failed} inference failures)[/bold red]"
+        if num_scoring_failed > 0:
+            msg += f" [bold red]({num_scoring_failed} scoring failures)[/bold red]"
         self._console.print(msg)
 
     def saved(self, path: str) -> None:

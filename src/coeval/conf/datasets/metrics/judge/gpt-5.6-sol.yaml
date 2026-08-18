@@ -1,0 +1,18 @@
+# Judge: gpt-5.6-sol via headless `codex exec` (codex-cli >= 0.146.0).
+_target_: coeval.clients.CodexExecJudge
+_convert_: all
+model: gpt-5.6-sol
+sandbox: read-only
+reasoning_effort: high
+timeout: 300.0
+output_schema:
+  type: object
+  properties:
+    explanation:
+      type: string
+    criteria_met:
+      type: boolean
+  required:
+    - explanation
+    - criteria_met
+  additionalProperties: false

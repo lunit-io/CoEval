@@ -1,7 +1,11 @@
-# Judge: gpt-4.1 via OpenAI API
+# Judge: gpt-4.1 via OpenAI API, or any OpenAI-compatible endpoint via OPENAI_API_BASE
 _target_: coeval.clients.PassthroughJudge
-api_base: https://api.openai.com/v1
-model: gpt-4.1
-api_key: ${oc.env:OPENAI_API_KEY}
-temperature: 0.0
-max_tokens: 2048
+config:
+  _target_: coeval.llm.config.LLMConfig
+  _convert_: all
+  api_base: ${oc.env:OPENAI_API_BASE,https://api.openai.com/v1}
+  model: gpt-4.1
+  api_key: ${oc.env:OPENAI_API_KEY}
+  temperature: 0.0
+  max_tokens: 2048
+  max_retries: 0

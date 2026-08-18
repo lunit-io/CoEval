@@ -1,0 +1,26 @@
+# @package _global_
+# Official scoring clips the mean because penalty criteria can make it negative.
+
+defaults:
+  - metrics/judge@healthbench_judge: gpt-4.1
+
+datasets:
+  healthbench_main:
+    _target_: coeval.datasets.healthbench.HealthBenchMainDataset
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}
+    sample_ratio: null
+
+metrics:
+  healthbench_main:
+    healthbench_rubric:
+      _target_: coeval.metrics.healthbench_rubric.HealthBenchRubricMetric
+      concurrent_limit: 10
+      max_attempts: 3
+      retry_delay_s: 1.0
+      judge: ${healthbench_judge}
+
+score_aggregators:
+  healthbench_main:
+    _target_: coeval.util.aggregation.clipped_avg_aggregator
+    _partial_: true

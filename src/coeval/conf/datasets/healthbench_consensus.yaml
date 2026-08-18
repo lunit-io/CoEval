@@ -2,16 +2,10 @@
 #
 # Standalone HealthBench Consensus config — dataset, metric, judge, aggregator.
 #
-# Scoring: avg_aggregator = simple mean of per-example scores.
-# HealthBench official formula: clip(mean(per-example scores), 0, 1).
-# Clipping is unnecessary — all 8,053 rubric criteria in the consensus
-# subset have uniform +5 points with no negative penalties, so per-example
-# scores are always in [0, 1].
+# Use the official clipped-average formula shared with HealthBench Main.
 #
 # Judge model swap (shared config group: conf/datasets/metrics/judge/):
 #   mise run eval -- datasets=healthbench_consensus datasets/metrics/judge@healthbench_judge=gpt-4.1
-#   mise run eval -- datasets=healthbench_consensus datasets/metrics/judge@healthbench_judge=gpt-5-mini
-#   mise run eval -- datasets=healthbench_consensus datasets/metrics/judge@healthbench_judge=kimi-25
 
 defaults:
   - metrics/judge@healthbench_judge: gpt-4.1
@@ -27,9 +21,11 @@ metrics:
     healthbench_rubric:
       _target_: coeval.metrics.healthbench_rubric.HealthBenchRubricMetric
       concurrent_limit: 10
+      max_attempts: 3
+      retry_delay_s: 1.0
       judge: ${healthbench_judge}
 
 score_aggregators:
   healthbench_consensus:
-    _target_: coeval.util.aggregation.avg_aggregator
+    _target_: coeval.util.aggregation.clipped_avg_aggregator
     _partial_: true
