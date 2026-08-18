@@ -118,7 +118,18 @@ For comparisons, require matching dataset versions, sample IDs or sampling polic
 
 ## Report the outcome
 
-Lead with completion status and the primary metric. Include:
+For every completed run, including a completed smoke test, lead with a Markdown
+table using one row per dataset and primary metric:
+
+| Status | Dataset / scope | Samples | Evaluated | Primary score | Pass rate | Inference failures | Scoring failures | Elapsed |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Complete | `<dataset / subset>` | `<n>` | `<n>` | `<score>` | `<rate>` | `<n>` | `<n>` | `<time>` |
+
+Use `N/A` for unavailable values rather than fabricating zero. Label completed
+smoke tests as `Smoke complete`, and never label partial, interrupted, or
+failure-contaminated runs as complete.
+
+After the table, include:
 
 - Dataset/subset, actual sample count, and sampling method.
 - Candidate endpoint host and model, with credentials omitted.
