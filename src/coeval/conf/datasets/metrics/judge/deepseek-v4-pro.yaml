@@ -1,0 +1,14 @@
+_target_: coeval.clients.PassthroughJudge
+config:
+  _target_: coeval.llm.config.LLMConfig
+  _convert_: all
+  api_base: http://shared-cluster-vm-026:4500/v1
+  model: deepseek-ai/DeepSeek-V4-Pro
+  api_key: local-no-auth
+  temperature: 1.0
+  max_tokens: 16384
+  timeout: 120
+  max_retries: 0
+  additional_kwargs:
+    top_p: 1.0
+    seed: 42
