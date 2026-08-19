@@ -13,6 +13,7 @@ from coeval.core.types import (
     ConversationalTestCase,
     EvaluationDataset,
     LLMTestCase,
+    TestCase,
     Turn,
 )
 
@@ -94,38 +95,33 @@ class GoldenDatasetBase(EvaluationDataset):
         messages.append({"role": "user", "content": golden.input})  # type: ignore[union-attr]
         return messages
 
-    def build_test_cases(self, predictions: list[str]) -> list[LLMTestCase]:
-        """
-        Build LLMTestCase objects from predictions and add to dataset.
+    def build_test_case(self, idx: int, golden: AnyGolden, prediction: str) -> TestCase:
+        """``idx`` is injected as ``_sample_id`` so results can be looked up."""
+        metadata = dict(golden.additional_metadata or {})
+        metadata["_sample_id"] = idx
+        test_case = LLMTestCase(
+            input=golden.input,
+            actual_output=prediction,
+            expected_output=golden.expected_output,
+            context=golden.context,
+            retrieval_context=golden.retrieval_context,
+            additional_metadata=metadata,
+        )
+        self.add_test_case(test_case)
+        return test_case
 
-        Args:
-            predictions: List of actual_output strings, same order as goldens
-
-        Returns:
-            List of LLMTestCase objects (also accessible via self.test_cases)
-        """
+    def build_test_cases(self, predictions: list[str]) -> list[TestCase]:
+        """One test case per golden, same order. ``predictions`` must match length."""
         if len(predictions) != len(self.goldens):
             raise ValueError(
                 f"Predictions length ({len(predictions)}) != goldens length ({len(self.goldens)})"
             )
-
-        built: list[LLMTestCase] = []
-        for idx, (golden, pred) in enumerate(
-            zip(self.goldens, predictions, strict=True)
-        ):
-            metadata = dict(golden.additional_metadata or {})
-            metadata["_sample_id"] = idx
-            test_case = LLMTestCase(
-                input=golden.input,
-                actual_output=pred,
-                expected_output=golden.expected_output,
-                context=golden.context,
-                retrieval_context=golden.retrieval_context,
-                additional_metadata=metadata,
+        return [
+            self.build_test_case(idx, golden, pred)
+            for idx, (golden, pred) in enumerate(
+                zip(self.goldens, predictions, strict=True)
             )
-            self.add_test_case(test_case)
-            built.append(test_case)
-        return built
+        ]
 
 
 class MultiTurnDatasetBase(GoldenDatasetBase):
@@ -136,8 +132,8 @@ class MultiTurnDatasetBase(GoldenDatasetBase):
     ``additional_metadata["system_prompt"]`` when present.
 
     ``get_generation_input()`` composes messages from ``system_prompt`` +
-    ``turns``.  ``build_test_cases()`` returns ``ConversationalTestCase``
-    objects with the model prediction appended as the final turn.
+    ``turns``.  ``build_test_case()`` returns a ``ConversationalTestCase``
+    with the model prediction appended as the final turn.
     """
 
     @property
@@ -161,36 +157,20 @@ class MultiTurnDatasetBase(GoldenDatasetBase):
             messages.append({"role": turn.role, "content": turn.content})
         return messages
 
-    def build_test_cases(self, predictions: list[str]) -> list[ConversationalTestCase]:
-        """Build ConversationalTestCase objects from predictions.
+    def build_test_case(
+        self, idx: int, golden: AnyGolden, prediction: str
+    ) -> ConversationalTestCase:
+        """Prediction becomes the final assistant turn.
 
-        Args:
-            predictions: Model responses, same order as goldens.
-
-        Returns:
-            List of ConversationalTestCase with full conversation turns.
+        Not added to ``self.test_cases`` — conversational metrics are driven from
+        the returned object.
         """
-        if len(predictions) != len(self.goldens):
-            raise ValueError(
-                f"Predictions length ({len(predictions)}) "
-                f"!= goldens length ({len(self.goldens)})"
-            )
+        metadata = dict(golden.additional_metadata or {})
+        if metadata.get("system_prompt") is None:
+            metadata["system_prompt"] = self.system_prompt
+        metadata["_sample_id"] = idx
 
-        built: list[ConversationalTestCase] = []
-        for idx, (golden, pred) in enumerate(
-            zip(self.goldens, predictions, strict=True)
-        ):
-            metadata = dict(golden.additional_metadata or {})
-            if metadata.get("system_prompt") is None:
-                metadata["system_prompt"] = self.system_prompt
-            metadata["_sample_id"] = idx
+        turns = list(golden.turns or [])
+        turns.append(Turn(role="assistant", content=prediction))
 
-            turns = list(golden.turns or [])
-            turns.append(Turn(role="assistant", content=pred))
-
-            test_case = ConversationalTestCase(
-                turns=turns,
-                additional_metadata=metadata,
-            )
-            built.append(test_case)
-        return built
+        return ConversationalTestCase(turns=turns, additional_metadata=metadata)

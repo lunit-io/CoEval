@@ -42,7 +42,7 @@ class _HealthBenchDatasetBase(MultiTurnDatasetBase):
     - turns: user/assistant turns from conversation (Turn only supports these roles)
     - additional_metadata: rubrics, example_tags, system_prompt (if present)
 
-    build_test_cases() produces ConversationalTestCase objects via
+    build_test_case() produces ConversationalTestCase objects via
     MultiTurnDatasetBase, appending the model prediction as the final turn.
     """
 
