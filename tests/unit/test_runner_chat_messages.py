@@ -47,11 +47,10 @@ async def test_generate_receives_custom_messages() -> None:
         return custom_messages
 
     runner = EvalRunner(client=client, concurrent_limit=1)
-    predictions, _ = await runner._generate_predictions(
-        _dataset_with(golden, get_generation_input=custom_input)
-    )
+    dataset = _dataset_with(golden, get_generation_input=custom_input)
+    prediction, _ = await runner._generate_one(dataset, 0, golden)
 
-    assert predictions == ["chat_mode"]
+    assert prediction == "chat_mode"
     client.generate.assert_awaited_once_with(custom_messages)
 
 
@@ -67,9 +66,9 @@ async def test_generate_receives_composed_messages_for_single_turn() -> None:
     )
 
     runner = EvalRunner(client=client, concurrent_limit=1)
-    predictions, _ = await runner._generate_predictions(_dataset_with(golden))
+    prediction, _ = await runner._generate_one(_dataset_with(golden), 0, golden)
 
-    assert predictions == ["response"]
+    assert prediction == "response"
     client.generate.assert_awaited_once_with(
         [
             {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
@@ -90,9 +89,9 @@ async def test_generate_uses_default_system_prompt() -> None:
     )
 
     runner = EvalRunner(client=client, concurrent_limit=1)
-    predictions, _ = await runner._generate_predictions(_dataset_with(golden))
+    prediction, _ = await runner._generate_one(_dataset_with(golden), 0, golden)
 
-    assert predictions == ["aspirin_info"]
+    assert prediction == "aspirin_info"
     client.generate.assert_awaited_once_with(
         [
             {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
