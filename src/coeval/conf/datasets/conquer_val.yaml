@@ -1,0 +1,73 @@
+# @package _global_
+#
+# Conquer Health VALIDATION split — the live leaderboard set.
+#
+# Published: teams iterate against it freely. Disjoint from conquer_test and
+# matched to it on theme share (<=0.16pp gap) and rubric structure (criteria per
+# example within 0.5%), so the val score is an unbiased estimate of the test
+# score. That matching is load-bearing: it is what makes per-item overfitting
+# self-punishing instead of merely unlucky.
+#
+# ~301 examples / 3,423 judge calls. Measured wall clock: ~3 min solo, ~11 min
+# with 10 concurrent submissions, ~23 min if all 20 land at once.
+#
+# Concurrency is deliberately lower than conquer_test: val runs share L1 with
+# teams' live development traffic, and starving interactive dev to speed up a
+# leaderboard refresh is the wrong trade. The test window has the field to itself.
+#
+#   uv run coeval datasets=conquer_val \
+#     client.llm.config.api_base=http://<team-container>:8000/v1 \
+#     client.llm.config.model=team-chatbot
+#
+# NOTE: the team's intended val judge is GLM-5.2-fp8. Agreement between it and
+# the DeepSeek test judge is UNVERIFIED (GLM was unreachable at measurement
+# time). Until that check runs, an unmeasured offset between the two judges
+# could exceed the gaps deciding the award. To grade val with the test judge
+# instead: datasets/metrics/judge@conquer_judge=deepseek-v4-pro
+
+defaults:
+  - metrics/judge@conquer_judge: glm-5.2-fp8
+
+datasets:
+  conquer_val:
+    _target_: coeval.datasets.conquer.ConquerHealthValDataset
+    num_samples: ${num_samples}   # smoke tests only; a truncated run is not comparable
+    system_prompt: ${system_prompt}
+
+metrics:
+  conquer_val:
+    healthbench_rubric:
+      _target_: coeval.metrics.healthbench_rubric.HealthBenchRubricMetric
+      # Judge fleet saturates at ~256 concurrent (50.7 req/s); past that the
+      # router sheds with HTTP 503 rather than queueing. 32 here leaves room for
+      # 8 simultaneous val runs before the aggregate reaches that ceiling.
+      concurrent_limit: 32
+      # A dropped example is worse than a slow one: it changes which items a
+      # team was scored on, which breaks comparison against every other team.
+      max_attempts: 4
+      retry_delay_s: 2.0
+      judge: ${conquer_judge}
+
+score_aggregators:
+  conquer_val:
+    _target_: coeval.util.aggregation.clipped_avg_aggregator
+    _partial_: true
+
+runner:
+  concurrent_limit: 32
+  inference_max_attempts: 2
+  inference_retry_delay_s: 2.0
+  # A team whose endpoint errors or returns an empty answer must score 0, not
+  # have those items dropped from its denominator. Dropping rewards failing
+  # loudly over answering badly, and leaves each team averaged over a different
+  # item set. Judge-side failures stay excluded -- those are ours, not theirs.
+  score_inference_failures_as_zero: true
+
+client:
+  llm:
+    config:
+      # Thinking counts against max_tokens and is 34-59% of generated characters
+      # (higher with RAG context). At 4096, 2% of responses spent the whole
+      # budget thinking and returned empty content.
+      max_tokens: 6144
+      timeout: 180.0

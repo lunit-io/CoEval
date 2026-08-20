@@ -1,0 +1,71 @@
+# @package _global_
+#
+# Conquer Health TEST split — decides the final ranking.
+#
+# Held out. `ids_path` is mandatory and must point OUTSIDE this repository:
+# every HealthBench prompt and rubric is public, so the only thing protecting
+# this set is which items were chosen. Committing the id list here would leak it.
+#
+# 500 examples / 5,659 judge calls per submission. Measured projections at 20
+# parallel submissions: judging 38 min (fleet-bound at 50.7 req/s), generation
+# 32 min single-call RAG or 65 min for a 2-call agentic pipeline. Overlapped
+# total 38-65 min. n=1000 was rejected: it needs ~70% more judge capacity AND
+# the 8x tp=1 L1 deployment, and lands at 130 min for agentic pipelines.
+#
+# Run-to-run noise is sd 0.011 at this size (measured 0.017 at n=200, scaled by
+# 1/sqrt(n)), so teams within ~3 points are a statistical tie. Rank with a
+# bootstrap CI over the common successfully-graded item set, and pre-declare the
+# tiebreak before results exist.
+#
+#   uv run coeval datasets=conquer_test \
+#     '++datasets.conquer_test.ids_path=/mnt/vast/lunit/coe_evaluation/conquer/conquer_test_ids.json' \
+#     client.llm.config.api_base=http://<team-container>:8000/v1 \
+#     client.llm.config.model=team-chatbot
+
+defaults:
+  - metrics/judge@conquer_judge: deepseek-v4-pro
+
+datasets:
+  conquer_test:
+    _target_: coeval.datasets.conquer.ConquerHealthTestDataset
+    ids_path: ???        # no default on purpose — see header
+    num_samples: ${num_samples}
+    system_prompt: ${system_prompt}
+
+metrics:
+  conquer_test:
+    healthbench_rubric:
+      _target_: coeval.metrics.healthbench_rubric.HealthBenchRubricMetric
+      # 20 submissions x 12 = 240, just under the measured 256 judge ceiling.
+      # This number is only correct for ~20-way parallelism. A solo run wants
+      # 64; a 40-way run wants 6. See the note below on enforcing it centrally.
+      concurrent_limit: 12
+      max_attempts: 4
+      retry_delay_s: 2.0
+      judge: ${conquer_judge}
+
+score_aggregators:
+  conquer_test:
+    _target_: coeval.util.aggregation.clipped_avg_aggregator
+    _partial_: true
+
+runner:
+  # 20 x 25 = 500, close to the measured generation optimum of C=512 (12.3
+  # req/s). C=1024 does not merely stop scaling, it collapses to 5.8 req/s with
+  # p50 latency of 139s, so this ceiling is a real one.
+  concurrent_limit: 25
+  # Two attempts, not three: retrying a 180s timeout three times burns 9 minutes
+  # on a single stuck item. A per-submission wall-clock budget is the backstop.
+  inference_max_attempts: 2
+  inference_retry_delay_s: 2.0
+  # A team whose endpoint errors or returns an empty answer must score 0, not
+  # have those items dropped from its denominator. Dropping rewards failing
+  # loudly over answering badly, and leaves each team averaged over a different
+  # item set. Judge-side failures stay excluded -- those are ours, not theirs.
+  score_inference_failures_as_zero: true
+
+client:
+  llm:
+    config:
+      max_tokens: 6144
+      timeout: 180.0
