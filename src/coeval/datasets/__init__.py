@@ -8,6 +8,10 @@ from coeval.datasets.attributionbench import (
     AttributionBenchStanfordGenSearchDataset,
 )
 from coeval.datasets.careqa import CareQADataset
+from coeval.datasets.conquer import (
+    ConquerHealthTestDataset,
+    ConquerHealthValDataset,
+)
 from coeval.datasets.headqa import HeadQADataset
 from coeval.datasets.healthbench import (
     HealthBenchConsensusDataset,
@@ -38,6 +42,8 @@ __all__ = [
     "AttributionBenchExpertQADataset",
     "AttributionBenchLFQADataset",
     "AttributionBenchStanfordGenSearchDataset",
+    "ConquerHealthTestDataset",
+    "ConquerHealthValDataset",
     "CareQADataset",
     "HeadQADataset",
     "HealthBenchConsensusDataset",

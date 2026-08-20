@@ -1,3 +1,9 @@
+# Rubric grading emits a short JSON verdict: measured 91 completion tokens
+# (mean, n=2944 calls). max_tokens is not free even when unused -- vLLM reserves
+# KV by it, and 2048 -> 4096 cost 20% throughput in measurement, so keep it tight.
+# temperature stays >0 deliberately: this model degenerates into repetition loops
+# at greedy decode. The cost is run-to-run score noise (sd 0.017 at n=200); the
+# mitigation is set size plus a multi-vote runoff, not temperature.
 _target_: coeval.clients.PassthroughJudge
 config:
   _target_: coeval.llm.config.LLMConfig
@@ -6,7 +12,7 @@ config:
   model: deepseek-ai/DeepSeek-V4-Pro
   api_key: local-no-auth
   temperature: 1.0
-  max_tokens: 16384
+  max_tokens: 512
   timeout: 120
   max_retries: 0
   additional_kwargs:

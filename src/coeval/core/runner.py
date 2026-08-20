@@ -42,6 +42,31 @@ class EvalRunner:
         client: Inference client (PassthroughClient, etc.)
         concurrent_limit: Max concurrent evaluations
         output_dir: Directory to write evaluation results to
+        score_inference_failures_as_zero: How to treat a sample whose inference
+            failed -- an endpoint error, a timeout, or a reply carrying no
+            content.
+
+            ``False`` (default) drops it from the aggregate. That is the right
+            reading for research: report quality on what the model actually
+            answered.
+
+            ``True`` scores it 0 and keeps it in the denominator. Use this for
+            competitive or comparative runs, where dropping is unsound in three
+            ways. It rewards failure -- returning an error on the questions you
+            expect to answer badly raises your mean, while returning a bad
+            answer lowers it. It desynchronises denominators, so two systems get
+            averaged over different item sets and stop being comparable. And it
+            is simply wrong on the merits: failing to answer is not the same as
+            not being asked.
+
+            Judge infrastructure failures are unaffected either way. Those are
+            our fault, not the endpoint's, and stay excluded via
+            ``scoring_failed``.
+
+            Note that sub-scores (``theme:*``, ``axis:*``) still omit
+            inference-failed samples; only the headline metric carries the 0.
+            Compare ``metric_scores[...].denominator`` against ``num_samples``
+            to see how many zeros a run absorbed.
     """
 
     def __init__(
@@ -51,6 +76,7 @@ class EvalRunner:
         output_dir: str | None = None,
         inference_max_attempts: int = 3,
         inference_retry_delay_s: float = 1.0,
+        score_inference_failures_as_zero: bool = False,
     ):
         if inference_max_attempts < 1:
             raise ValueError("inference_max_attempts must be at least 1")
@@ -60,6 +86,7 @@ class EvalRunner:
         self.client = client
         self.concurrent_limit = concurrent_limit
         self.output_dir = output_dir
+        self.score_inference_failures_as_zero = score_inference_failures_as_zero
         self.inference_max_attempts = inference_max_attempts
         self.inference_retry_delay_s = inference_retry_delay_s
         self.semaphore = asyncio.Semaphore(concurrent_limit)
@@ -133,12 +160,17 @@ class EvalRunner:
     ) -> list[MetricResult]:
         """Score a single test case from eval_lookup."""
         if metadata["inference_failed"]:
+            as_zero = self.score_inference_failures_as_zero
             return [
                 MetricResult(
                     name=m.__name__,
-                    score=None,
+                    score=0.0 if as_zero else None,
                     passed=False,
-                    reason="Skipped: inference failed",
+                    reason=(
+                        "Inference failed: scored 0 (endpoint produced no usable answer)"
+                        if as_zero
+                        else "Skipped: inference failed"
+                    ),
                 )
                 for m in metrics
             ]
@@ -242,8 +274,14 @@ class EvalRunner:
         score_aggregator: ScoreAggregatorFn,
     ) -> EvalSummary:
         """Build summary statistics from evaluation results."""
+        # Judge failures are always excluded -- they are our infrastructure, not the
+        # endpoint's answer. Inference failures are excluded only in research mode;
+        # in competitive mode they carry a 0 into the denominator.
         fully_scored = [
-            r for r in results if not r.inference_failed and not r.scoring_failed
+            r
+            for r in results
+            if not r.scoring_failed
+            and (self.score_inference_failures_as_zero or not r.inference_failed)
         ]
         n = len(results)
 

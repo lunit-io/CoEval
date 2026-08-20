@@ -564,3 +564,60 @@ class TestHealthBenchRubricMeasure:
         assert metric._details["cluster_scores"][
             "cluster:test_cluster"
         ] == pytest.approx(1 / 3)
+
+    @pytest.mark.asyncio
+    async def test_axis_scores_calculated(self) -> None:
+        """Every HealthBench criterion carries exactly one ``axis:`` tag, so axis
+        is the complete per-dimension breakdown (cluster tags cover only ~14%).
+        This is what the leaderboard reports alongside the headline score."""
+        client = _make_judge()
+        # accuracy: A met (1 of 1)          -> 1.0
+        # completeness: B failed, C met (2 of 5) -> 0.4
+        client.a_generate.side_effect = [
+            json.dumps({"explanation": "yes", "criteria_met": True}),
+            json.dumps({"explanation": "no", "criteria_met": False}),
+            json.dumps({"explanation": "yes", "criteria_met": True}),
+        ]
+        metric = HealthBenchRubricMetric(judge=client)
+        test_case = _make_test_case(
+            rubrics=[
+                {"criterion": "A", "points": 1.0, "tags": ["axis:accuracy"]},
+                {"criterion": "B", "points": 3.0, "tags": ["axis:completeness"]},
+                {"criterion": "C", "points": 2.0, "tags": ["axis:completeness"]},
+            ]
+        )
+
+        await metric.a_measure(test_case)
+
+        axis = metric._details["axis_scores"]
+        assert axis["axis:accuracy"] == pytest.approx(1.0)
+        assert axis["axis:completeness"] == pytest.approx(2 / 5)
+        # Sub-scores are what the runner promotes into separate metric rows.
+        names = {sub["name"] for sub in metric._details["_sub_scores"]}
+        assert {"axis:accuracy", "axis:completeness"} <= names
+
+    @pytest.mark.asyncio
+    async def test_axis_and_cluster_scores_coexist(self) -> None:
+        """A criterion can carry both tag families; neither breakdown may swallow
+        the other."""
+        client = _make_judge()
+        client.a_generate.side_effect = [
+            json.dumps({"explanation": "yes", "criteria_met": True}),
+        ]
+        metric = HealthBenchRubricMetric(judge=client)
+        test_case = _make_test_case(
+            rubrics=[
+                {
+                    "criterion": "A",
+                    "points": 4.0,
+                    "tags": ["axis:accuracy", "cluster:hedging_x"],
+                }
+            ]
+        )
+
+        await metric.a_measure(test_case)
+
+        assert metric._details["axis_scores"]["axis:accuracy"] == pytest.approx(1.0)
+        assert metric._details["cluster_scores"]["cluster:hedging_x"] == pytest.approx(
+            1.0
+        )

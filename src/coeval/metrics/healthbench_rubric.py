@@ -324,7 +324,12 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
                 f"({sum(1 for g in grading_responses if g['criteria_met'])}/{len(rubrics)} met)"
             )
             example_tags = metadata.get("example_tags", [])
-            cluster_scores = self._calculate_cluster_scores(rubrics, grading_responses)
+            cluster_scores = self._calculate_tag_scores(
+                rubrics, grading_responses, "cluster:"
+            )
+            axis_scores = self._calculate_tag_scores(
+                rubrics, grading_responses, "axis:"
+            )
 
             # Build sub-scores for tag/cluster-level aggregation.
             # The runner promotes these into separate MetricResult entries
@@ -335,10 +340,13 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
                     sub_scores.append({"name": tag, "score": score})
             for tag, cs in cluster_scores.items():
                 sub_scores.append({"name": tag, "score": cs})
+            for tag, axs in axis_scores.items():
+                sub_scores.append({"name": tag, "score": axs})
 
             self._details = {
                 "example_tags": example_tags,
                 "cluster_scores": cluster_scores,
+                "axis_scores": axis_scores,
                 "_sub_scores": sub_scores,
                 "rubric_grades": [
                     {
@@ -406,19 +414,29 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
             self.success = False
         return self.success or False
 
-    def _calculate_cluster_scores(
-        self, rubrics: list[dict], grading_responses: list[dict]
+    def _calculate_tag_scores(
+        self, rubrics: list[dict], grading_responses: list[dict], prefix: str
     ) -> dict[str, float]:
-        """Calculate subset scores for each unique `cluster:*` tag."""
-        # Find all unique cluster tags
-        cluster_tags = set()
-        for r in rubrics:
-            for tag in r.get("tags", []):
-                if tag.startswith("cluster:"):
-                    cluster_tags.add(tag)
+        """Score the criteria carrying each distinct ``prefix`` tag, separately.
 
-        cluster_scores = {}
-        for tag in cluster_tags:
+        Used for both ``cluster:*`` and ``axis:*``. The two differ in coverage and
+        in usefulness. Measured over HealthBench Main (5,000 examples / 57,237
+        criteria): every criterion carries exactly one ``axis:`` tag -- one of
+        completeness (38.9%), accuracy (33.0%), context_awareness (15.7%),
+        communication_quality (7.9%), instruction_following (4.5%) -- whereas only
+        14% carry a ``cluster:`` tag, and those names are long composites of
+        theme, physician category, and axis. Axis is therefore both the complete
+        and the readable decomposition, and it is what a leaderboard should show.
+
+        Each subset is scored with the same weighted formula as the whole rubric,
+        so a subset score is comparable to the headline score.
+        """
+        tags = {
+            tag for r in rubrics for tag in r.get("tags", []) if tag.startswith(prefix)
+        }
+
+        tag_scores = {}
+        for tag in tags:
             # Filter rubrics and their corresponding responses that have this tag
             filtered_pairs = [
                 (r, g)
@@ -431,6 +449,6 @@ class HealthBenchRubricMetric(BaseConversationalMetric):
             f_rubrics, f_responses = zip(*filtered_pairs, strict=True)
             score = calculate_score(list(f_rubrics), list(f_responses))
             if score is not None:
-                cluster_scores[tag] = score
+                tag_scores[tag] = score
 
-        return cluster_scores
+        return tag_scores
