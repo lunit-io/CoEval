@@ -2,7 +2,7 @@
 # Passthrough Client Configuration (Baseline - no RAG)
 #
 # Usage:
-#   mise run eval -- client.llm.config.api_base=http://shared-cluster-vm-026:9006/v1 \
+#   mise run eval -- client.llm.config.api_base=http://shared-cluster-vm-031:9411/v1 \
 #                    client.llm.config.model=your-model
 
 system_prompt: "You are Chain-of-Evidence"
@@ -14,12 +14,11 @@ client:
     config:
       _target_: coeval.llm.config.LLMConfig
       _convert_: all
-      api_base: http://shared-cluster-vm-026:9410/v1
-      model: lunit-hackathon
+      api_base: http://shared-cluster-vm-031:9411/v1
+      model: Lunit/L2-preview
       api_key: ${oc.env:OPENAI_API_KEY,null}
       temperature: 0.0
       max_retries: 3
-      # Avoid truncating long-form HealthBench answers.
       max_tokens: 32768
       timeout: 360.0
       additional_kwargs:
