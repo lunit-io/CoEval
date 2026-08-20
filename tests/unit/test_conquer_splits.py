@@ -136,3 +136,77 @@ class TestEndpointFailuresScoreZero:
         _, summary = _failed_result_summary(as_zero=True)
         assert summary.num_inference_failed == 1
         assert summary.num_samples == 2
+
+
+class TestSplitGeneratorSecrecy:
+    """The generator is public, so the split must not be derivable from it.
+
+    Without a salt the selection is a pure function of the (documented) sizes,
+    which would mean the repository contains the holdout: clone, run with
+    --n-val 300 --n-test 500, recover the exact test ids.
+    """
+
+    @staticmethod
+    def _load_generator():
+        import importlib.util
+        import sys
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[2] / "scripts" / "make_conquer_split.py"
+        spec = importlib.util.spec_from_file_location("make_conquer_split", path)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        sys.modules["make_conquer_split"] = mod
+        spec.loader.exec_module(mod)
+        return mod
+
+    @staticmethod
+    def _rows(n: int = 400) -> list[dict]:
+        return [
+            {
+                "prompt_id": f"id-{i:04d}",
+                "example_tags": ["theme:hedging"],
+                "rubrics": [{"criterion": "c", "points": 5, "tags": []}] * (2 + i % 9),
+                "prompt": [{"role": "user", "content": "q"}],
+            }
+            for i in range(n)
+        ]
+
+    def test_different_salts_give_different_holdouts(self) -> None:
+        gen = self._load_generator()
+        rows = self._rows()
+        _, test_a = gen.build_split(rows, 60, 100, "salt-aaaaaaaaaaaaaaaaaa")
+        _, test_b = gen.build_split(rows, 60, 100, "salt-bbbbbbbbbbbbbbbbbb")
+        assert set(test_a) != set(test_b)
+        # Overlap should sit near chance for a 160-of-400 draw, not near total.
+        assert len(set(test_a) & set(test_b)) < 0.8 * len(test_a)
+
+    def test_same_salt_is_reproducible(self) -> None:
+        gen = self._load_generator()
+        rows = self._rows()
+        first = gen.build_split(rows, 60, 100, "salt-cccccccccccccccccc")
+        second = gen.build_split(rows, 60, 100, "salt-cccccccccccccccccc")
+        assert first == second
+
+    def test_splits_stay_disjoint_under_salting(self) -> None:
+        gen = self._load_generator()
+        val, test = gen.build_split(self._rows(), 60, 100, "salt-dddddddddddddddddd")
+        assert not set(val) & set(test)
+
+    def test_fingerprint_does_not_reveal_the_salt(self) -> None:
+        gen = self._load_generator()
+        salt = "salt-eeeeeeeeeeeeeeeeee"
+        fp = gen.salt_fingerprint(salt)
+        assert salt not in fp
+        assert fp != gen.salt_fingerprint(salt + "x")
+
+    def test_shipped_val_file_carries_no_salt(self) -> None:
+        """The val list is published; a salt inside it would hand over the test set."""
+        from importlib import resources
+
+        with resources.as_file(
+            resources.files("coeval.data").joinpath("conquer_val_ids.json")
+        ) as path:
+            payload = json.loads(path.read_text())
+        assert "salt" not in payload
+        assert "salt_fingerprint" in payload

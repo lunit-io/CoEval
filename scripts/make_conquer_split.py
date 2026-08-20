@@ -18,8 +18,18 @@ is written separately and must live OUTSIDE the repository -- every HealthBench
 prompt and rubric is public, so the only thing protecting the test set is which
 items were chosen.
 
+That is also why --salt is mandatory. This script is itself public, so a purely
+deterministic selection would mean the repository *contains* the holdout: anyone
+could re-run it with the documented sizes and recover the exact test ids in
+seconds. Salting the per-theme ordering breaks that. Publishing the val ids stays
+safe because recovering the salt from them is a 2^128 search.
+
+Keep the salt with the test id list, outside the repo. Losing it costs
+reproducibility of this split; leaking it costs the holdout.
+
 Usage:
-    python scripts/make_conquer_split.py --n-val 300 --n-test 500 \
+    SALT=$(openssl rand -hex 32)
+    python scripts/make_conquer_split.py --n-val 300 --n-test 500 --salt "$SALT" \
         --val-out src/coeval/data/conquer_val_ids.json \
         --test-out /mnt/vast/lunit/coe_evaluation/conquer/conquer_test_ids.json
 """
@@ -27,6 +37,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import statistics as st
 import sys
@@ -37,7 +49,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from coeval.datasets.healthbench import MAIN_URL, _HealthBenchDatasetBase  # noqa: E402
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+MIN_SALT_CHARS = 16
 
 
 def theme_of(row: dict) -> str:
@@ -45,6 +58,18 @@ def theme_of(row: dict) -> str:
         if tag.startswith("theme:"):
             return tag
     return "theme:unknown"
+
+
+def salted_key(salt: str, prompt_id: str) -> str:
+    """Keyed digest of a prompt id: deterministic given the salt, unpredictable
+    without it. Ordering by this is what keeps the split out of the public repo."""
+    return hmac.new(salt.encode(), prompt_id.encode(), hashlib.sha256).hexdigest()
+
+
+def salt_fingerprint(salt: str) -> str:
+    """Published so two artifacts can be checked for a common salt without
+    revealing it."""
+    return hashlib.sha256(b"conquer-split-v2|" + salt.encode()).hexdigest()[:16]
 
 
 def systematic(items: list, k: int) -> list:
@@ -56,7 +81,7 @@ def systematic(items: list, k: int) -> list:
 
 
 def build_split(
-    rows: list[dict], n_val: int, n_test: int
+    rows: list[dict], n_val: int, n_test: int, salt: str
 ) -> tuple[list[str], list[str]]:
     by_theme: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
@@ -79,11 +104,17 @@ def build_split(
                 f"{theme}: need {need} examples but stratum holds only {len(group)}"
             )
 
-        # Sort by rubric structure, then deal alternately -> matched distributions.
-        ordered = sorted(
-            group, key=lambda r: (len(r.get("rubrics", [])), r["prompt_id"])
+        # Two-stage selection. First choose WHICH examples take part, ordered by a
+        # salt-keyed digest, so the candidate pool cannot be reconstructed without
+        # the salt. Then order that pool by rubric structure so the deal below
+        # yields matched distributions. The order matters: an unsalted pool would
+        # leak the holdout outright, because val is published and test would be
+        # nothing more than the pool minus val.
+        shuffled = sorted(group, key=lambda r: salted_key(salt, r["prompt_id"]))
+        pool = sorted(
+            shuffled[:need],
+            key=lambda r: (len(r.get("rubrics", [])), r["prompt_id"]),
         )
-        pool = systematic(ordered, need)
 
         # Deal proportionally: walk the pool and assign to whichever split is
         # furthest behind its quota. Keeps both splits spread across the whole
@@ -137,11 +168,26 @@ def describe(name: str, rows: list[dict]) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--salt",
+        required=True,
+        help=(
+            "high-entropy secret keying the selection. Generate with "
+            "`openssl rand -hex 32` and store it beside the test id list, "
+            "never in the repository."
+        ),
+    )
     ap.add_argument("--n-val", type=int, default=300)
     ap.add_argument("--n-test", type=int, default=500)
     ap.add_argument("--val-out", type=Path, required=True)
     ap.add_argument("--test-out", type=Path, required=True)
     args = ap.parse_args()
+    if len(args.salt) < MIN_SALT_CHARS:
+        raise SystemExit(
+            f"--salt must be at least {MIN_SALT_CHARS} characters; a guessable salt "
+            "is the same as no salt, because this script is public. "
+            "Try: openssl rand -hex 32"
+        )
 
     raw = _HealthBenchDatasetBase._read_or_download(MAIN_URL)
     rows = [json.loads(line) for line in raw.strip().split("\n") if line.strip()]
@@ -150,7 +196,7 @@ def main() -> None:
     ]
     print(f"pool: {len(rows)} scorable HealthBench Main examples")
 
-    val_ids, test_ids = build_split(rows, args.n_val, args.n_test)
+    val_ids, test_ids = build_split(rows, args.n_val, args.n_test, args.salt)
 
     overlap = set(val_ids) & set(test_ids)
     if overlap:
@@ -174,7 +220,14 @@ def main() -> None:
                     "schema_version": SCHEMA_VERSION,
                     "split": split,
                     "source": MAIN_URL,
-                    "selection": "theme-stratified, systematic over criteria-count order",
+                    "selection": (
+                        "theme-stratified; salt-keyed candidate pool, then dealt over "
+                        "criteria-count order"
+                    ),
+                    # Fingerprint only. The salt itself never enters an artifact --
+                    # the val file is published, and a file carrying the salt would
+                    # hand over the holdout.
+                    "salt_fingerprint": salt_fingerprint(args.salt),
                     "stats": stats,
                     "prompt_ids": sorted(ids),
                 },

@@ -6,6 +6,11 @@
 # every HealthBench prompt and rubric is public, so the only thing protecting
 # this set is which items were chosen. Committing the id list here would leak it.
 #
+# The split generator is public too, so it takes a mandatory high-entropy --salt;
+# without one the selection is a pure function of the sizes quoted below and this
+# repository would contain the holdout. Salt and test id list live together at
+# /mnt/vast/lunit/coe_evaluation/conquer/ and neither belongs in git.
+#
 # 500 examples / 5,659 judge calls per submission. Measured projections at 20
 # parallel submissions: judging 38 min (fleet-bound at 50.7 req/s), generation
 # 32 min single-call RAG or 65 min for a 2-call agentic pipeline. Overlapped
