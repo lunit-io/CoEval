@@ -12,14 +12,7 @@ config:
   model: glm-5.2-fp8
   api_key: local-no-auth
   temperature: 1.0
-  # 1024 is the optimum on both axes, measured at concurrency 120 over 480 real
-  # rubric items (usable = replies parse_grading_response accepts, which is what
-  # the metric actually consumes):
-  #   512  -> 11.0 usable call/s, 5.2% truncated mid-JSON and retried into a
-  #           scoring failure. A truncated reply also burns the whole budget.
-  #   1024 -> 12.2 usable call/s, 0.2% truncated.
-  #   2048 -> 8.1 usable call/s. This is the KV-reservation cost noted above.
-  max_tokens: 1024
+  max_tokens: 2048
   timeout: 120
   max_retries: 0
   additional_kwargs:
