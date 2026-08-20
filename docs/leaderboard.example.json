@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-20T05:41:03+00:00",
+  "stage": "official",
+  "dataset": {
+    "name": "conquer_test",
+    "n_items": 500,
+    "n_scored": 499,
+    "n_dropped": 1,
+    "dropped_sample_ids": [
+      137
+    ],
+    "judge": "deepseek-ai/DeepSeek-V4-Pro"
+  },
+  "scoring": {
+    "primary_metric": "HealthBench Rubric",
+    "aggregation": "clipped mean over the common item set",
+    "bootstrap_iterations": 10000,
+    "confidence": 0.95,
+    "run_to_run_sd": 0.011,
+    "run_to_run_basis": "measured sd 0.0174 over 6 identical runs at n=200, scaled by 1/sqrt(n)",
+    "ci_note": "ci_item_sampling is the paired bootstrap over items. ci_low/ci_high additionally fold in run-to-run noise, which a bootstrap over items cannot see, and are the interval to quote.",
+    "tie_rule": "two teams tie when the interval on their paired score difference contains zero after run-to-run noise is included"
+  },
+  "entries": [
+    {
+      "rank": 1,
+      "team": "team-aurora",
+      "score": 0.6119,
+      "ci_low": 0.5808,
+      "ci_high": 0.643,
+      "ci_item_sampling": [
+        0.5894,
+        0.634
+      ],
+      "sd_item_sampling": 0.0114,
+      "sd_total": 0.0159,
+      "tied_with_ranks": [],
+      "n_scored": 499,
+      "n_items": 500,
+      "n_inference_failed": 0,
+      "n_scoring_failed": 0,
+      "axis_scores": {
+        "accuracy": 0.6175,
+        "communication_quality": 0.6211,
+        "completeness": 0.618,
+        "context_awareness": 0.6205,
+        "instruction_following": 0.6176
+      },
+      "theme_scores": {
+        "communication": 0.5961,
+        "complex_responses": 0.6584,
+        "context_seeking": 0.6344,
+        "emergency_referrals": 0.5994,
+        "global_health": 0.6039,
+        "health_data_tasks": 0.5927,
+        "hedging": 0.5988
+      },
+      "mean_response_chars": 3099,
+      "mean_latency_ms": 19238,
+      "flags": [],
+      "submission": {
+        "repo": "github.com/conquer-health/team-aurora",
+        "commit": "9ddac257f7",
+        "submitted_at": "2026-08-22T10:14:00Z",
+        "models_used": "L1 only",
+        "rag_sources": [
+          "clinical_guidelines",
+          "pubmed"
+        ]
+      }
+    },
+    {
+      "rank": 2,
+      "team": "team-borealis",
+      "score": 0.5464,
+      "ci_low": 0.5153,
+      "ci_high": 0.5775,
+      "ci_item_sampling": [
+        0.5239,
+        0.5692
+      ],
+      "sd_item_sampling": 0.0114,
+      "sd_total": 0.0159,
+      "tied_with_ranks": [
+        3
+      ],
+      "n_scored": 499,
+      "n_items": 500,
+      "n_inference_failed": 0,
+      "n_scoring_failed": 0,
+      "axis_scores": {
+        "accuracy": 0.5582,
+        "communication_quality": 0.557,
+        "completeness": 0.5434,
+        "context_awareness": 0.5467,
+        "instruction_following": 0.554
+      },
+      "theme_scores": {
+        "communication": 0.5532,
+        "complex_responses": 0.5149,
+        "context_seeking": 0.5389,
+        "emergency_referrals": 0.552,
+        "global_health": 0.5382,
+        "health_data_tasks": 0.574,
+        "hedging": 0.5536
+      },
+      "mean_response_chars": 3082,
+      "mean_latency_ms": 19077,
+      "flags": [],
+      "submission": {
+        "repo": "github.com/conquer-health/team-borealis",
+        "commit": "b7ff17abdb",
+        "submitted_at": "2026-08-22T10:14:00Z",
+        "models_used": "L1 only",
+        "rag_sources": [
+          "clinical_guidelines",
+          "pubmed"
+        ]
+      }
+    },
+    {
+      "rank": 3,
+      "team": "team-cinder",
+      "score": 0.546,
+      "ci_low": 0.5147,
+      "ci_high": 0.5772,
+      "ci_item_sampling": [
+        0.5232,
+        0.5689
+      ],
+      "sd_item_sampling": 0.0115,
+      "sd_total": 0.016,
+      "tied_with_ranks": [
+        2
+      ],
+      "n_scored": 499,
+      "n_items": 500,
+      "n_inference_failed": 0,
+      "n_scoring_failed": 1,
+      "axis_scores": {
+        "accuracy": 0.548,
+        "communication_quality": 0.5395,
+        "completeness": 0.5533,
+        "context_awareness": 0.5452,
+        "instruction_following": 0.5472
+      },
+      "theme_scores": {
+        "communication": 0.5355,
+        "complex_responses": 0.5635,
+        "context_seeking": 0.5501,
+        "emergency_referrals": 0.5812,
+        "global_health": 0.471,
+        "health_data_tasks": 0.5716,
+        "hedging": 0.5506
+      },
+      "mean_response_chars": 3118,
+      "mean_latency_ms": 18998,
+      "flags": [],
+      "submission": {
+        "repo": "github.com/conquer-health/team-cinder",
+        "commit": "f10a99c98c",
+        "submitted_at": "2026-08-22T10:14:00Z",
+        "models_used": "L1 only",
+        "rag_sources": [
+          "clinical_guidelines",
+          "pubmed"
+        ]
+      }
+    },
+    {
+      "rank": 4,
+      "team": "team-dune",
+      "score": 0.4524,
+      "ci_low": 0.4214,
+      "ci_high": 0.4835,
+      "ci_item_sampling": [
+        0.4298,
+        0.4748
+      ],
+      "sd_item_sampling": 0.0114,
+      "sd_total": 0.0159,
+      "tied_with_ranks": [
+        5
+      ],
+      "n_scored": 499,
+      "n_items": 500,
+      "n_inference_failed": 14,
+      "n_scoring_failed": 0,
+      "axis_scores": {
+        "accuracy": 0.4682,
+        "communication_quality": 0.4763,
+        "completeness": 0.4659,
+        "context_awareness": 0.4773,
+        "instruction_following": 0.4666
+      },
+      "theme_scores": {
+        "communication": 0.4447,
+        "complex_responses": 0.4821,
+        "context_seeking": 0.4684,
+        "emergency_referrals": 0.4404,
+        "global_health": 0.4761,
+        "health_data_tasks": 0.4416,
+        "hedging": 0.4139
+      },
+      "mean_response_chars": 3117,
+      "mean_latency_ms": 18781,
+      "flags": [
+        "endpoint_failures_scored_zero"
+      ],
+      "submission": {
+        "repo": "github.com/conquer-health/team-dune",
+        "commit": "b8cefee692",
+        "submitted_at": "2026-08-22T10:14:00Z",
+        "models_used": "L1 only",
+        "rag_sources": [
+          "clinical_guidelines",
+          "pubmed"
+        ]
+      }
+    },
+    {
+      "rank": 5,
+      "team": "team-ember",
+      "score": 0.4175,
+      "ci_low": 0.3859,
+      "ci_high": 0.4491,
+      "ci_item_sampling": [
+        0.3949,
+        0.4407
+      ],
+      "sd_item_sampling": 0.0118,
+      "sd_total": 0.0161,
+      "tied_with_ranks": [
+        4
+      ],
+      "n_scored": 499,
+      "n_items": 500,
+      "n_inference_failed": 0,
+      "n_scoring_failed": 0,
+      "axis_scores": {
+        "accuracy": 0.4092,
+        "communication_quality": 0.4086,
+        "completeness": 0.4116,
+        "context_awareness": 0.4069,
+        "instruction_following": 0.4101
+      },
+      "theme_scores": {
+        "communication": 0.4025,
+        "complex_responses": 0.4521,
+        "context_seeking": 0.4023,
+        "emergency_referrals": 0.42,
+        "global_health": 0.3825,
+        "health_data_tasks": 0.4444,
+        "hedging": 0.4194
+      },
+      "mean_response_chars": 3097,
+      "mean_latency_ms": 19143,
+      "flags": [],
+      "submission": {
+        "repo": "github.com/conquer-health/team-ember",
+        "commit": "8bbd7613c0",
+        "submitted_at": "2026-08-22T10:14:00Z",
+        "models_used": "L1 only",
+        "rag_sources": [
+          "clinical_guidelines",
+          "pubmed"
+        ]
+      }
+    }
+  ],
+  "runoff_candidates": [
+    "team-aurora",
+    "team-borealis",
+    "team-cinder"
+  ],
+  "runoff_excluded_count": 0,
+  "notes": [
+    "1 of 500 items were not gradeable for every team and are excluded from all scores so the comparison stays paired."
+  ]
+}
