@@ -32,6 +32,43 @@ different behaviour, and `auto` pairing follows the stage.
 Ranking is by raw score in both: entries are sorted on `score` and `rank` is
 positional. `tied_with_ranks` never merges two ranks.
 
+## Unusable submissions
+
+A submission that cannot be scored at all — no results file, a file truncated by
+a run killed mid-write, or every item ungradeable — is handled by stage:
+
+- **`provisional`** skips it, keeps building the board from the rest, and lists
+  it under `unusable_submissions` with a reason plus a note. One broken run at
+  3am must not freeze the board for everyone else.
+- **`official`** exits non-zero. A human should look before money is awarded.
+
+`--on-unusable {auto,fail,skip}` overrides. Every submission being unusable is an
+error in both stages.
+
+Note the distinction from a *bad* run: a team whose endpoint errors or returns
+nothing still appears, scored 0, with `n_inference_failed` set and a flag. Only a
+run that yields no scorable data at all is quarantined. Absent from the table
+never means "scored zero"; check `unusable_submissions`.
+
+## Testing without a GPU
+
+Two harnesses, both committed, neither needing the cluster:
+
+```bash
+# fabricate 9 teams incl. tie / flaky / verbose / broken / truncated / empty
+python scripts/make_fixture_submissions.py --out /tmp/subs --n-items 301 \
+    --teams a:strong b:mid c:tie d:weak e:flaky f:verbose g:broken h:truncated i:empty
+python scripts/build_leaderboard.py --runs /tmp/subs --dataset conquer_val \
+    --stage provisional --out /tmp/lb.json
+
+# a stand-in team container with switchable pathologies
+python scripts/mock_team_server.py --port 8099 --mode empty   # or slow/error500/badshape/flaky/serial
+```
+
+The fixture generator covers the board: ranking, ties, deltas, flags,
+`n_ungraded`, and the quarantine path. The mock container covers the
+harness-to-container contract, which is where day-of failures actually come from.
+
 ## Resubmissions
 
 The script scores one run; **which run represents a team is the dashboard's

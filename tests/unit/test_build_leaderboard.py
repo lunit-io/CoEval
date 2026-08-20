@@ -369,3 +369,127 @@ class TestResubmissionDelta:
         assert "delta" not in payload["entries"][0]
         # The threshold is still published so the UI can explain the rule.
         assert payload["scoring"]["delta_threshold"] > 0
+
+
+class TestUnusableSubmissions:
+    """One team's broken run must not take the whole live board down with it,
+    and must not quietly vanish from the official one either."""
+
+    @staticmethod
+    def _corrupt(root: Path, team: str, dataset: str = "ds") -> None:
+        d = root / team
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"results_{dataset}.json").write_text('[{"sample_id": 0, "inp')
+
+    def test_provisional_skips_and_reports_a_corrupt_file(self, tmp_path: Path) -> None:
+        write_run(tmp_path / "runs", "good", dict.fromkeys(range(50), 0.5))
+        write_run(tmp_path / "runs", "also-good", dict.fromkeys(range(50), 0.4))
+        self._corrupt(tmp_path / "runs", "truncated")
+        payload = run_script(
+            tmp_path / "runs", tmp_path / "lb.json", "--stage", "provisional"
+        )
+        assert [e["team"] for e in payload["entries"]] == ["good", "also-good"]
+        assert [u["team"] for u in payload["unusable_submissions"]] == ["truncated"]
+        assert "not valid JSON" in payload["unusable_submissions"][0]["reason"]
+        assert any("could not be scored" in n for n in payload["notes"])
+
+    def test_provisional_skips_a_run_with_nothing_gradeable(
+        self, tmp_path: Path
+    ) -> None:
+        write_run(tmp_path / "runs", "good", dict.fromkeys(range(40), 0.5))
+        write_run(tmp_path / "runs", "good2", dict.fromkeys(range(40), 0.5))
+        write_run(tmp_path / "runs", "allfail", dict.fromkeys(range(40), None))
+        payload = run_script(
+            tmp_path / "runs", tmp_path / "lb.json", "--stage", "provisional"
+        )
+        assert {e["team"] for e in payload["entries"]} == {"good", "good2"}
+        assert payload["unusable_submissions"][0]["team"] == "allfail"
+        assert "no item was gradeable" in payload["unusable_submissions"][0]["reason"]
+
+    def test_provisional_skips_a_missing_results_file(self, tmp_path: Path) -> None:
+        write_run(tmp_path / "runs", "good", dict.fromkeys(range(30), 0.5))
+        write_run(tmp_path / "runs", "good2", dict.fromkeys(range(30), 0.5))
+        (tmp_path / "runs" / "never-ran").mkdir(parents=True)
+        payload = run_script(
+            tmp_path / "runs", tmp_path / "lb.json", "--stage", "provisional"
+        )
+        assert payload["unusable_submissions"][0]["team"] == "never-ran"
+        assert "missing" in payload["unusable_submissions"][0]["reason"]
+
+    def test_official_refuses_rather_than_dropping_a_team(self, tmp_path: Path) -> None:
+        """Money depends on the official table, so a human looks before it ships."""
+        write_run(tmp_path / "runs", "good", dict.fromkeys(range(40), 0.5))
+        self._corrupt(tmp_path / "runs", "truncated")
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--runs",
+                str(tmp_path / "runs"),
+                "--dataset",
+                "ds",
+                "--out",
+                str(tmp_path / "lb.json"),
+                "--stage",
+                "official",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode != 0
+        assert "truncated" in proc.stderr
+
+    def test_on_unusable_overrides_the_stage_default(self, tmp_path: Path) -> None:
+        write_run(tmp_path / "runs", "good", dict.fromkeys(range(40), 0.5))
+        write_run(tmp_path / "runs", "good2", dict.fromkeys(range(40), 0.5))
+        self._corrupt(tmp_path / "runs", "truncated")
+        forced_skip = run_script(
+            tmp_path / "runs",
+            tmp_path / "a.json",
+            "--stage",
+            "official",
+            "--on-unusable",
+            "skip",
+        )
+        assert len(forced_skip["unusable_submissions"]) == 1
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--runs",
+                str(tmp_path / "runs"),
+                "--dataset",
+                "ds",
+                "--out",
+                str(tmp_path / "b.json"),
+                "--stage",
+                "provisional",
+                "--on-unusable",
+                "fail",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode != 0
+
+    def test_every_submission_unusable_is_always_an_error(self, tmp_path: Path) -> None:
+        self._corrupt(tmp_path / "runs", "a")
+        self._corrupt(tmp_path / "runs", "b")
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--runs",
+                str(tmp_path / "runs"),
+                "--dataset",
+                "ds",
+                "--out",
+                str(tmp_path / "lb.json"),
+                "--stage",
+                "provisional",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode != 0
+        assert "no scorable submission" in proc.stderr

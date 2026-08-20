@@ -87,11 +87,25 @@ class Submission:
     meta: dict = field(default_factory=dict)
 
 
+class UnusableSubmission(Exception):
+    """This submission cannot be scored. Whether that halts the build or merely
+    removes one row is the caller's decision, not the loader's."""
+
+
 def load_submission(team_dir: Path, dataset: str) -> Submission:
     results_path = team_dir / f"results_{dataset}.json"
     if not results_path.exists():
-        raise SystemExit(f"{team_dir.name}: missing {results_path.name}")
-    rows = json.loads(results_path.read_text())
+        raise UnusableSubmission(f"missing {results_path.name}")
+    try:
+        rows = json.loads(results_path.read_text())
+    except json.JSONDecodeError as exc:
+        # A run killed mid-write leaves a truncated file. On a rolling board that
+        # must not take every other team's score down with it.
+        raise UnusableSubmission(
+            f"{results_path.name} is not valid JSON: {exc}"
+        ) from exc
+    if not isinstance(rows, list) or not rows:
+        raise UnusableSubmission(f"{results_path.name} holds no results")
 
     sub = Submission(team=team_dir.name, path=team_dir)
     meta_path = team_dir / "submission.json"
@@ -126,6 +140,12 @@ def load_submission(team_dir: Path, dataset: str) -> Submission:
                 theme[name[len("theme:") :]] = float(score)
         sub.axis[sid] = axis
         sub.theme[sid] = theme
+
+    if not sub.item_scores:
+        raise UnusableSubmission(
+            f"no item was gradeable ({sub.n_inference_failed} inference failures, "
+            f"{sub.n_scoring_failed} judge failures across {sub.n_items} items)"
+        )
     return sub
 
 
@@ -235,6 +255,17 @@ def main() -> None:
         ),
     )
     ap.add_argument(
+        "--on-unusable",
+        choices=["auto", "fail", "skip"],
+        default="auto",
+        help=(
+            "what to do with a submission that cannot be scored at all. 'auto' "
+            "fails for --stage official, where a human should look before money "
+            "is awarded, and skips for provisional, where one broken run at 3am "
+            "must not freeze the board for everyone else."
+        ),
+    )
+    ap.add_argument(
         "--pair-items",
         choices=["auto", "on", "off"],
         default="auto",
@@ -258,7 +289,26 @@ def main() -> None:
     team_dirs = sorted(p for p in args.runs.iterdir() if p.is_dir())
     if not team_dirs:
         raise SystemExit(f"no submission directories under {args.runs}")
-    subs = [load_submission(d, args.dataset) for d in team_dirs]
+    skip_unusable = (
+        args.stage != "official"
+        if args.on_unusable == "auto"
+        else args.on_unusable == "skip"
+    )
+    subs: list[Submission] = []
+    unusable: list[dict[str, str]] = []
+    for d in team_dirs:
+        try:
+            subs.append(load_submission(d, args.dataset))
+        except UnusableSubmission as exc:
+            if not skip_unusable:
+                raise SystemExit(f"{d.name}: {exc}") from exc
+            unusable.append({"team": d.name, "reason": str(exc)})
+            print(f"  SKIPPED {d.name}: {exc}")
+    if not subs:
+        raise SystemExit(
+            "no scorable submission found"
+            + (f" ({len(unusable)} unusable)" if unusable else "")
+        )
     check_same_items(subs)
 
     previous: dict[str, float] = {}
@@ -448,6 +498,7 @@ def main() -> None:
             ),
         },
         "entries": entries,
+        "unusable_submissions": unusable,
         "runoff_candidates": runoff,
         "runoff_excluded_count": runoff_truncated,
         "notes": (
@@ -463,6 +514,15 @@ def main() -> None:
                 "right trade for a development signal: intersecting would let one "
                 "team's judge failure move everyone else's displayed score."
             ]
+        )
+        + (
+            [
+                f"{len(unusable)} submission(s) could not be scored and are absent "
+                "from the table rather than shown as zero: "
+                + ", ".join(u["team"] for u in unusable)
+            ]
+            if unusable
+            else []
         )
         + (
             [

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-20T06:16:10+00:00",
+  "generated_at": "2026-08-20T07:56:57+00:00",
   "stage": "official",
   "dataset": {
     "name": "conquer_test",
@@ -278,6 +278,7 @@
       }
     }
   ],
+  "unusable_submissions": [],
   "runoff_candidates": [
     "team-aurora",
     "team-borealis",
