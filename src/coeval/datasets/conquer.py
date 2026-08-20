@@ -15,6 +15,11 @@ generator ships in this public repository: unsalted, the documented split sizes
 would be enough to recompute the holdout. Publishing the val ids stays safe --
 recovering the salt from them is a 2^128 search.
 
+The two are nested: within each theme a single balanced ordering is built, val
+takes the prefix and test the slice after it. Val is therefore invariant to the
+test size and can be frozen and published before that size is settled, and test
+grows as a superset rather than being reshuffled.
+
 Both splits are theme-stratified and matched on rubric structure, so the val
 score is an unbiased (if noisier) estimate of the test score. That is what makes
 per-item gaming self-punishing rather than merely unlucky.

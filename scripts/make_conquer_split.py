@@ -72,12 +72,49 @@ def salt_fingerprint(salt: str) -> str:
     return hashlib.sha256(b"conquer-split-v2|" + salt.encode()).hexdigest()[:16]
 
 
-def systematic(items: list, k: int) -> list:
-    """Pick k evenly spaced items, preserving the ordering's distribution."""
-    n = len(items)
-    if k >= n:
-        return list(items)
-    return [items[round(i * n / k)] for i in range(k)]
+def balanced_order(items: list[dict], salt: str) -> list[dict]:
+    """One ordering per theme, such that any contiguous window of it is
+    representative of the theme's rubric-size distribution.
+
+    Items are bucketed by criteria count, ordered inside each bucket by the
+    salted digest, then merged on relative position within their bucket. The
+    merged sequence therefore cycles through the whole size range repeatedly
+    instead of walking it once, so a prefix -- or the slice just after it -- is a
+    fair sample rather than the small-rubric end of the theme.
+
+    Two properties follow, and both matter operationally:
+
+    - val takes the prefix and test the slice after it, so **val does not move
+      when n_test changes**. It can be frozen and published while the test size
+      is still undecided.
+    - test is a growing window, so test(500) is a prefix of test(1000). The test
+      size can be settled as late as the scoring run, against measured capacity,
+      without regenerating anything.
+
+    The ordering stays secret because the within-bucket order is salt-keyed;
+    bucket membership alone is public, and is not enough to reconstruct it.
+    """
+    buckets: dict[int, list[dict]] = defaultdict(list)
+    for row in items:
+        buckets[len(row.get("rubrics", []))].append(row)
+
+    placed: list[tuple[float, str, dict]] = []
+    for size, bucket in sorted(buckets.items()):
+        bucket.sort(key=lambda r: salted_key(salt, r["prompt_id"]))
+        # Offset each bucket's positions by a salted amount rather than centring
+        # them. A fixed +0.5 pins every small bucket to the middle of the merged
+        # sequence, so rare rubric sizes systematically miss the prefix and pile
+        # into the slice after it -- which showed up as val/test drift on mean
+        # criteria count growing with the test size. A per-bucket offset
+        # decorrelates bucket size from position.
+        offset = int(salted_key(salt, f"bucket:{size}")[:8], 16) / 0x100000000
+        n = len(bucket)
+        for i, row in enumerate(bucket):
+            placed.append(
+                (((i + offset) / n) % 1.0, salted_key(salt, row["prompt_id"]), row)
+            )
+    placed.sort(key=lambda t: (t[0], t[1]))
+    return [row for _pos, _key, row in placed]
 
 
 def build_split(
@@ -104,32 +141,13 @@ def build_split(
                 f"{theme}: need {need} examples but stratum holds only {len(group)}"
             )
 
-        # Two-stage selection. First choose WHICH examples take part, ordered by a
-        # salt-keyed digest, so the candidate pool cannot be reconstructed without
-        # the salt. Then order that pool by rubric structure so the deal below
-        # yields matched distributions. The order matters: an unsalted pool would
-        # leak the holdout outright, because val is published and test would be
-        # nothing more than the pool minus val.
-        shuffled = sorted(group, key=lambda r: salted_key(salt, r["prompt_id"]))
-        pool = sorted(
-            shuffled[:need],
-            key=lambda r: (len(r.get("rubrics", [])), r["prompt_id"]),
-        )
-
-        # Deal proportionally: walk the pool and assign to whichever split is
-        # furthest behind its quota. Keeps both splits spread across the whole
-        # criteria-count range instead of splitting it in half.
-        v: list[dict] = []
-        t: list[dict] = []
-        for row in pool:
-            want_val = (len(v) + 1) / k_val if k_val else 2.0
-            want_test = (len(t) + 1) / k_test if k_test else 2.0
-            if len(v) < k_val and (len(t) >= k_test or want_val <= want_test):
-                v.append(row)
-            else:
-                t.append(row)
-        val_ids += [r["prompt_id"] for r in v]
-        test_ids += [r["prompt_id"] for r in t]
+        # One balanced, salt-secret ordering per theme. val is the prefix, test
+        # the slice immediately after it. k_val depends only on n_val, so val is
+        # invariant to the test size, and growing k_test only extends the test
+        # window rather than reshuffling either split.
+        order = balanced_order(group, salt)
+        val_ids += [r["prompt_id"] for r in order[:k_val]]
+        test_ids += [r["prompt_id"] for r in order[k_val : k_val + k_test]]
 
     return val_ids, test_ids
 

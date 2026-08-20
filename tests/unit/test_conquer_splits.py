@@ -210,3 +210,63 @@ class TestSplitGeneratorSecrecy:
             payload = json.loads(path.read_text())
         assert "salt" not in payload
         assert "salt_fingerprint" in payload
+
+
+class TestSplitIsNested:
+    """The val split must be publishable before the test size is decided.
+
+    A generator where val moved when n_test changed would force one freeze for
+    both, so the test size could not be settled against measured capacity
+    without voiding every val score teams had already accumulated.
+    """
+
+    @staticmethod
+    def _gen():
+        return TestSplitGeneratorSecrecy._load_generator()
+
+    @staticmethod
+    def _rows(n: int = 900) -> list[dict]:
+        # Deliberately uneven rubric sizes, including rare ones, since that is
+        # what stresses the balanced ordering.
+        return [
+            {
+                "prompt_id": f"id-{i:04d}",
+                "example_tags": [f"theme:{'a' if i % 3 else 'b'}"],
+                "rubrics": [{"criterion": "c", "points": 5, "tags": []}]
+                * (2 + (i * 7) % 23),
+                "prompt": [{"role": "user", "content": "q"}],
+            }
+            for i in range(n)
+        ]
+
+    def test_val_does_not_move_when_test_grows(self) -> None:
+        gen, rows, salt = self._gen(), self._rows(), "salt-ffffffffffffffffff"
+        val_small, _ = gen.build_split(rows, 100, 150, salt)
+        val_large, _ = gen.build_split(rows, 100, 400, salt)
+        assert val_small == val_large
+
+    def test_test_split_grows_as_a_superset(self) -> None:
+        gen, rows, salt = self._gen(), self._rows(), "salt-gggggggggggggggggg"
+        _, small = gen.build_split(rows, 100, 150, salt)
+        _, large = gen.build_split(rows, 100, 400, salt)
+        assert set(small) <= set(large)
+
+    def test_still_disjoint_at_every_test_size(self) -> None:
+        gen, rows, salt = self._gen(), self._rows(), "salt-hhhhhhhhhhhhhhhhhh"
+        for n_test in (150, 300, 400):
+            val, test = gen.build_split(rows, 100, n_test, salt)
+            assert not set(val) & set(test), f"overlap at n_test={n_test}"
+
+    def test_any_window_of_the_ordering_is_size_representative(self) -> None:
+        """The property the nesting rests on: val (a prefix) and test (the slice
+        after it) must both look like the pool on rubric size."""
+        gen, rows, salt = self._gen(), self._rows(), "salt-iiiiiiiiiiiiiiiiii"
+        import statistics as st
+
+        pool_mean = st.mean(len(r["rubrics"]) for r in rows)
+        by_id = {r["prompt_id"]: r for r in rows}
+        val, test = gen.build_split(rows, 150, 400, salt)
+        for name, ids in (("val", val), ("test", test)):
+            mean = st.mean(len(by_id[i]["rubrics"]) for i in ids)
+            drift = abs(mean - pool_mean) / pool_mean
+            assert drift < 0.06, f"{name} drifts {drift:.1%} from the pool"

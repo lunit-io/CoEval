@@ -12,7 +12,13 @@
 # internal shared storage; neither belongs in git, and the location is
 # communicated to run operators out of band.
 #
-# 500 examples / 5,659 judge calls per submission. Measured projections at 20
+# The split is nested: val is a prefix of a per-theme balanced ordering and test
+# is the slice after it, so val does not move when the test size changes, and
+# test(500) is a subset of test(1000). Val can therefore be frozen and published
+# while the test size is still open, and the test size can be settled at scoring
+# time against measured capacity by re-running the generator with the same salt.
+#
+# 500 examples / 5,690 judge calls per submission. Measured projections at 20
 # parallel submissions: judging 38 min (fleet-bound at 50.7 req/s), generation
 # 32 min single-call RAG or 65 min for a 2-call agentic pipeline. Overlapped
 # total 38-65 min. n=1000 was rejected: it needs ~70% more judge capacity AND
