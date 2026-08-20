@@ -17,7 +17,12 @@ from pathlib import Path
 
 from hydra.core.hydra_config import HydraConfig
 
-from coeval.core.evaluate import EvalLookup, MetricScore, a_evaluate_one
+from coeval.core.evaluate import (
+    EvalLookup,
+    MetricScore,
+    a_evaluate_one,
+    gather_or_cancel,
+)
 from coeval.core.schema import (
     EvalResult,
     EvalSummary,
@@ -353,8 +358,8 @@ class EvalRunner:
                 f"[magenta]Judging {name}...",
                 total=len(dataset.goldens),
             )
-            pipelined = await asyncio.gather(
-                *[
+            pipelined = await gather_or_cancel(
+                [
                     generate_then_score(idx, golden)
                     for idx, golden in enumerate(dataset.goldens)
                 ]

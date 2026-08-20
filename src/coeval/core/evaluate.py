@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import Coroutine, Sequence
 from dataclasses import dataclass
 
 from deepeval.metrics.utils import copy_metrics
@@ -15,6 +15,11 @@ from coeval.metrics.base import DeterministicMetric
 logger = logging.getLogger(__name__)
 
 EvalLookup = dict[int, list["MetricScore"]]
+
+# Ceiling on a single LLM metric call. deepeval's dispatcher applied a per-test-case
+# deadline; without one, a metric that never returns holds its semaphore slot forever
+# and the whole run stalls (observed once: a stuck judge call hung a run for an hour).
+DEFAULT_METRIC_TIMEOUT_S = 900.0
 
 
 def _get_sample_id(obj: object) -> int:
@@ -56,6 +61,7 @@ async def a_evaluate_one(
     metrics: Sequence[BaseMetric],
     semaphore: asyncio.Semaphore,
     ignore_errors: bool = True,
+    metric_timeout_s: float | None = DEFAULT_METRIC_TIMEOUT_S,
 ) -> list[MetricScore]:
     """Score one test case; ``semaphore`` caps concurrent test cases.
 
@@ -85,18 +91,26 @@ async def a_evaluate_one(
     if not llm_metrics:
         return scores
 
-    # ponytail: sequential — no dataset configures more than one LLM metric today.
+    async def measure(metric: BaseMetric) -> MetricScore:
+        coro = metric.a_measure(test_case, _show_indicator=False)
+        try:
+            if metric_timeout_s is None:
+                await coro
+            else:
+                await asyncio.wait_for(coro, timeout=metric_timeout_s)
+        except Exception as e:
+            if not ignore_errors:
+                raise
+            logger.error("Metric %s failed: %s", metric.__name__, e)
+            return MetricScore.from_error(metric, f"{type(e).__name__}: {e}")
+        return MetricScore.from_metric(metric)
+
     async with semaphore:
-        for metric in copy_metrics(llm_metrics):
-            try:
-                await metric.a_measure(test_case, _show_indicator=False)
-            except Exception as e:
-                if not ignore_errors:
-                    raise
-                logger.error("Metric %s failed: %s", metric.__name__, e)
-                scores.append(MetricScore.from_error(metric, str(e)))
-                continue
-            scores.append(MetricScore.from_metric(metric))
+        copied = copy_metrics(llm_metrics)
+        if len(copied) == 1:
+            scores.append(await measure(copied[0]))
+        else:
+            scores.extend(await asyncio.gather(*[measure(m) for m in copied]))
 
     return scores
 
@@ -106,9 +120,30 @@ async def a_evaluate(
     metrics: Sequence[BaseMetric],
     max_concurrent: int = 10,
     ignore_errors: bool = True,
+    metric_timeout_s: float | None = DEFAULT_METRIC_TIMEOUT_S,
 ) -> EvalLookup:
     semaphore = asyncio.Semaphore(max_concurrent)
-    results = await asyncio.gather(
-        *[a_evaluate_one(tc, metrics, semaphore, ignore_errors) for tc in test_cases]
+    results = await gather_or_cancel(
+        [
+            a_evaluate_one(tc, metrics, semaphore, ignore_errors, metric_timeout_s)
+            for tc in test_cases
+        ]
     )
     return dict(zip((_get_sample_id(tc) for tc in test_cases), results, strict=True))
+
+
+async def gather_or_cancel(coros: list[Coroutine]) -> list:
+    """``asyncio.gather`` that cancels and drains siblings when one task fails.
+
+    Plain ``gather`` re-raises immediately but leaves the others running, so a
+    failure mid-run can keep spending judge calls after the caller gave up.
+    """
+    tasks = [asyncio.create_task(c) for c in coros]
+    try:
+        return await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
