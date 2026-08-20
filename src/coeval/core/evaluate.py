@@ -1,40 +1,35 @@
-"""Metric evaluation — deterministic metrics run directly, LLM metrics via deepeval."""
+"""Metric evaluation — deterministic metrics run inline, LLM metrics await the judge."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from deepeval.evaluate import evaluate as _deepeval_evaluate
-from deepeval.evaluate.configs import AsyncConfig, DisplayConfig, ErrorConfig
+from deepeval.metrics.utils import copy_metrics
 
 from coeval.core.types import BaseMetric, TestCase
 from coeval.metrics.base import DeterministicMetric
 
 logger = logging.getLogger(__name__)
-logging.getLogger("deepeval.evaluate.execute").setLevel(logging.WARNING)
 
 EvalLookup = dict[int, list["MetricScore"]]
 
 
 def _get_sample_id(obj: object) -> int:
-    """Extract _sample_id from a test case or test result's additional_metadata."""
     metadata = getattr(obj, "additional_metadata", None) or {}
     sample_id = metadata.get("_sample_id")
     if sample_id is None:
         raise KeyError(
             f"_sample_id missing from additional_metadata on {type(obj).__name__}. "
-            "Ensure build_test_cases() injects _sample_id."
+            "Ensure build_test_case() injects _sample_id."
         )
     return int(sample_id)
 
 
 @dataclass
 class MetricScore:
-    """Container for an individual metric evaluation result."""
-
     name: str
     score: float | None
     success: bool
@@ -42,97 +37,78 @@ class MetricScore:
     error: str | None = None
 
     @classmethod
-    def from_metric_data(cls, md: object) -> MetricScore:
-        """Create a MetricScore from a deepeval metric data object."""
+    def from_metric(cls, metric: BaseMetric) -> MetricScore:
         return cls(
-            name=md.name,
-            score=md.score,
-            success=md.success,
-            reason=md.reason,
-            error=md.error,
+            name=metric.__name__,
+            score=metric.score,
+            success=metric.is_successful(),
+            reason=metric.reason,
+            error=metric.error,
         )
 
+    @classmethod
+    def from_error(cls, metric: BaseMetric, error: str) -> MetricScore:
+        return cls(name=metric.__name__, score=None, success=False, error=error)
 
-def _evaluate_deterministic(
-    test_cases: list[TestCase],
-    metrics: list[DeterministicMetric],
-    ignore_errors: bool,
-) -> EvalLookup:
-    """Run deterministic metrics directly — no deepeval overhead."""
-    lookup: EvalLookup = defaultdict(list)
-    for tc in test_cases:
-        sid = _get_sample_id(tc)
-        for metric in metrics:
+
+async def a_evaluate_one(
+    test_case: TestCase,
+    metrics: Sequence[BaseMetric],
+    semaphore: asyncio.Semaphore,
+    ignore_errors: bool = True,
+) -> list[MetricScore]:
+    """Score one test case; ``semaphore`` caps concurrent test cases.
+
+    LLM metrics run on per-test-case copies because score/reason live on the
+    instance. ``copy_metrics`` forwards ``__init__`` args, so a metric holding its
+    own semaphore (``HealthBenchRubricMetric``) keeps sharing it and stays globally
+    rate-limited.
+    """
+    scores: list[MetricScore] = []
+    llm_metrics: list[BaseMetric] = []
+
+    # ponytail: deterministic metrics reuse the shared instance — measure() has no
+    # await, so concurrent samples can't interleave between it and reading .score.
+    for metric in metrics:
+        if not isinstance(metric, DeterministicMetric):
+            llm_metrics.append(metric)
+            continue
+        try:
+            metric.measure(test_case)
+        except Exception as e:
+            if not ignore_errors:
+                raise
+            scores.append(MetricScore.from_error(metric, str(e)))
+            continue
+        scores.append(MetricScore.from_metric(metric))
+
+    if not llm_metrics:
+        return scores
+
+    # ponytail: sequential — no dataset configures more than one LLM metric today.
+    async with semaphore:
+        for metric in copy_metrics(llm_metrics):
             try:
-                metric.measure(tc)
+                await metric.a_measure(test_case, _show_indicator=False)
             except Exception as e:
                 if not ignore_errors:
                     raise
-                lookup[sid].append(
-                    MetricScore(
-                        name=metric.__name__, score=None, success=False, error=str(e)
-                    )
-                )
+                logger.error("Metric %s failed: %s", metric.__name__, e)
+                scores.append(MetricScore.from_error(metric, str(e)))
                 continue
-            lookup[sid].append(
-                MetricScore(
-                    name=metric.__name__,
-                    score=metric.score,
-                    success=metric.is_successful(),
-                    reason=metric.reason,
-                )
-            )
-    return lookup
+            scores.append(MetricScore.from_metric(metric))
+
+    return scores
 
 
-def _evaluate_nondeterministic(
-    test_cases: list[TestCase],
-    metrics: list[BaseMetric],
-    max_concurrent: int,
-    ignore_errors: bool,
-) -> EvalLookup:
-    """Run non-deterministic metrics via deepeval.evaluate()."""
-    result = _deepeval_evaluate(
-        test_cases=test_cases,
-        metrics=metrics,
-        async_config=AsyncConfig(run_async=True, max_concurrent=max_concurrent),
-        display_config=DisplayConfig(
-            show_indicator=True, print_results=False, verbose_mode=False
-        ),
-        error_config=ErrorConfig(ignore_errors=ignore_errors),
-    )
-    return {
-        _get_sample_id(tr): [MetricScore.from_metric_data(md) for md in tr.metrics_data]
-        for tr in result.test_results
-    }
-
-
-def evaluate(
-    test_cases: list[TestCase],
+async def a_evaluate(
+    test_cases: Sequence[TestCase],
     metrics: Sequence[BaseMetric],
     max_concurrent: int = 10,
     ignore_errors: bool = True,
 ) -> EvalLookup:
-    """Evaluate metrics and return per-sample scores.
-
-    Deterministic metrics run directly (fast, no deepeval overhead).
-    LLM-based metrics run through deepeval.evaluate().
-    """
-    deterministic = [m for m in metrics if isinstance(m, DeterministicMetric)]
-    nondeterministic = [m for m in metrics if not isinstance(m, DeterministicMetric)]
-
-    lookup: EvalLookup = defaultdict(list)
-
-    if deterministic:
-        for sid, scores in _evaluate_deterministic(
-            test_cases, deterministic, ignore_errors
-        ).items():
-            lookup[sid].extend(scores)
-
-    if nondeterministic:
-        for sid, scores in _evaluate_nondeterministic(
-            test_cases, nondeterministic, max_concurrent, ignore_errors
-        ).items():
-            lookup[sid].extend(scores)
-
-    return dict(lookup)
+    semaphore = asyncio.Semaphore(max_concurrent)
+    results = await asyncio.gather(
+        *[a_evaluate_one(tc, metrics, semaphore, ignore_errors) for tc in test_cases]
+    )
+    return dict(zip((_get_sample_id(tc) for tc in test_cases), results, strict=True))

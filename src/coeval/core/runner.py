@@ -3,7 +3,8 @@ Evaluation Runner - orchestrates the full evaluation pipeline.
 
 Design:
     - Pluggable inference clients
-    - Custom evaluate() handles metric dispatch (det vs deepeval)
+    - Generation and judging overlap per sample (no phase barrier)
+    - a_evaluate_one() handles metric dispatch (deterministic vs LLM judge)
     - Runner focuses on generation, scoring, and reporting
 """
 
@@ -16,7 +17,7 @@ from pathlib import Path
 
 from hydra.core.hydra_config import HydraConfig
 
-from coeval.core.evaluate import EvalLookup, evaluate
+from coeval.core.evaluate import EvalLookup, MetricScore, a_evaluate_one
 from coeval.core.schema import (
     EvalResult,
     EvalSummary,
@@ -29,6 +30,9 @@ from coeval.util.console import console
 from coeval.util.parsers import parse_structured_response
 
 logger = logging.getLogger(__name__)
+
+# (test_case, metadata, metric scores) — scores is None when inference failed.
+_PipelineResult = tuple[TestCase, dict, list[MetricScore] | None]
 
 
 class EvalRunner:
@@ -92,57 +96,33 @@ class EvalRunner:
         assert last_error is not None
         raise last_error
 
-    async def _generate_predictions(
+    async def _generate_one(
         self,
         dataset: GoldenDatasetBase,
-    ) -> tuple[list[str], list[dict]]:
-        """Generate predictions for all goldens.
+        idx: int,
+        golden: object,
+    ) -> tuple[str, dict]:
+        """Returns (actual_output, metadata)."""
+        gen_start = time.perf_counter()
+        inference_error: str | None = None
 
-        Returns:
-            Tuple of (predictions, metadata_list) in same order as goldens.
-        """
-        goldens = dataset.goldens
-        dataset_name = dataset.name
+        try:
+            query = dataset.get_generation_input(golden)
+            completion = await self._generate_with_retry(query, idx)
+        except Exception as e:
+            logger.error(f"Inference failed for sample {idx}: {e}")
+            completion, inference_error = "", str(e)
 
-        async def generate_one(idx: int, golden: object) -> tuple[str, dict]:
-            gen_start = time.perf_counter()
-            inference_error: str | None = None
-
-            try:
-                query = dataset.get_generation_input(golden)
-                completion = await self._generate_with_retry(query, idx)
-            except Exception as e:
-                logger.error(f"Inference failed for sample {idx}: {e}")
-                completion, inference_error = "", str(e)
-
-            gen_ms = (time.perf_counter() - gen_start) * 1000
-
-            parsed = parse_structured_response(completion)
-            actual_output = parsed.answer or completion
-            rationale = parsed.reasoning or ""
-
-            progress.advance(task)
-            metadata = {
-                "sample_id": idx,
-                "rationale": rationale,
-                "generation_time_ms": gen_ms,
-                "inference_failed": inference_error is not None,
-                "inference_error": inference_error,
-            }
-            return actual_output, metadata
-
-        with console.progress() as progress:
-            task = progress.add_task(
-                f"[cyan]Generating responses for {dataset_name}...",
-                total=len(goldens),
-            )
-            results = await asyncio.gather(
-                *[generate_one(i, g) for i, g in enumerate(goldens)]
-            )
-
-        predictions = [pred for pred, _ in results]
-        metadata_list = [meta for _, meta in results]
-        return predictions, metadata_list
+        parsed = parse_structured_response(completion)
+        metadata = {
+            "sample_id": idx,
+            "rationale": parsed.reasoning or "",
+            "generation_time_ms": (time.perf_counter() - gen_start) * 1000,
+            "scoring_time_ms": 0.0,
+            "inference_failed": inference_error is not None,
+            "inference_error": inference_error,
+        }
+        return parsed.answer or completion, metadata
 
     def _score_test_case(
         self,
@@ -246,7 +226,7 @@ class EvalRunner:
                     rationale=meta["rationale"],
                     metrics=metric_results,
                     generation_time_ms=meta["generation_time_ms"],
-                    scoring_time_ms=0.0,
+                    scoring_time_ms=meta["scoring_time_ms"],
                     inference_failed=meta["inference_failed"],
                     inference_error=meta["inference_error"],
                     scoring_failed=scoring_failed,
@@ -307,23 +287,48 @@ class EvalRunner:
         console.start_eval(len(dataset.goldens), name)
         start_time = time.perf_counter()
 
-        predictions, metadata_list = await self._generate_predictions(dataset)
-        test_cases = dataset.build_test_cases(predictions)
+        # Generation and judging overlap: each sample goes straight to the judge
+        # once its own generation lands, instead of waiting for the whole pass.
+        # The two semaphores cap each stage independently and provide backpressure.
+        judge_semaphore = asyncio.Semaphore(self.concurrent_limit)
 
-        scorable_test_cases = [
-            tc
-            for tc, metadata in zip(test_cases, metadata_list, strict=True)
-            if not metadata["inference_failed"]
-        ]
-        eval_lookup = (
-            evaluate(
-                test_cases=scorable_test_cases,
-                metrics=metrics,
-                max_concurrent=self.concurrent_limit,
+        async def generate_then_score(idx: int, golden: object) -> _PipelineResult:
+            prediction, metadata = await self._generate_one(dataset, idx, golden)
+            progress.advance(gen_task)
+            test_case = dataset.build_test_case(idx, golden, prediction)
+
+            scores = None
+            if not metadata["inference_failed"]:
+                score_start = time.perf_counter()
+                scores = await a_evaluate_one(test_case, metrics, judge_semaphore)
+                metadata["scoring_time_ms"] = (time.perf_counter() - score_start) * 1000
+
+            progress.advance(judge_task)
+            return test_case, metadata, scores
+
+        with console.progress() as progress:
+            gen_task = progress.add_task(
+                f"[cyan]Generating responses for {name}...",
+                total=len(dataset.goldens),
             )
-            if scorable_test_cases
-            else {}
-        )
+            judge_task = progress.add_task(
+                f"[magenta]Judging {name}...",
+                total=len(dataset.goldens),
+            )
+            pipelined = await asyncio.gather(
+                *[
+                    generate_then_score(idx, golden)
+                    for idx, golden in enumerate(dataset.goldens)
+                ]
+            )
+
+        test_cases = [tc for tc, _, _ in pipelined]
+        metadata_list = [meta for _, meta, _ in pipelined]
+        eval_lookup = {
+            meta["sample_id"]: scores
+            for _, meta, scores in pipelined
+            if scores is not None
+        }
 
         results = self._build_eval_results(
             test_cases, metadata_list, metrics, eval_lookup

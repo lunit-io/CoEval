@@ -223,6 +223,38 @@ class TestHealthBenchConsensusDataset:
         assert tc.additional_metadata["_sample_id"] == 0
 
     @patch("coeval.datasets.healthbench.urllib.request.urlopen")
+    def test_build_test_case_is_order_independent(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        """Per-sample builds out of order must match the batch build.
+
+        The runner pipelines generate/judge, so build_test_case() is called in
+        completion order, not golden order.
+        """
+        mock_response = MagicMock()
+        mock_response.read.return_value = _mock_jsonl_response(
+            [_make_sample(prompt_id=f"test-{i:03d}") for i in range(3)]
+        )
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        dataset = HealthBenchConsensusDataset()
+        predictions = ["a", "b", "c"]
+        batch = dataset.build_test_cases(predictions)
+        streamed = {
+            idx: dataset.build_test_case(idx, dataset.goldens[idx], predictions[idx])
+            for idx in (2, 0, 1)
+        }
+
+        for idx, expected in enumerate(batch):
+            actual = streamed[idx]
+            assert actual.additional_metadata == expected.additional_metadata
+            assert [(t.role, t.content) for t in actual.turns] == [
+                (t.role, t.content) for t in expected.turns
+            ]
+
+    @patch("coeval.datasets.healthbench.urllib.request.urlopen")
     def test_build_test_cases_copies_effective_system_prompt(
         self, mock_urlopen: MagicMock
     ) -> None:

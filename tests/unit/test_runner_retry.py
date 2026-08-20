@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
 
@@ -7,6 +8,7 @@ from deepeval.test_case import LLMTestCase
 from coeval.core.evaluate import MetricScore
 from coeval.core.runner import EvalRunner
 from coeval.core.schema import EvalResult, EvalSummary, MetricResult
+from coeval.metrics.base import DeterministicMetric
 from coeval.util.aggregation import avg_aggregator, merge_summaries
 from coeval.util.console import EvalConsole
 
@@ -39,12 +41,13 @@ async def test_two_transient_failures_then_success_yields_successful_sample() ->
     )
     runner = EvalRunner(client=client, concurrent_limit=1)
 
-    predictions, metadata = await runner._generate_predictions(_dataset())
+    dataset = _dataset()
+    prediction, metadata = await runner._generate_one(dataset, 0, dataset.goldens[0])
 
     assert client.calls == 3
-    assert predictions == ["recovered answer"]
-    assert metadata[0]["inference_failed"] is False
-    assert metadata[0]["inference_error"] is None
+    assert prediction == "recovered answer"
+    assert metadata["inference_failed"] is False
+    assert metadata["inference_error"] is None
 
 
 @pytest.mark.asyncio
@@ -54,12 +57,13 @@ async def test_exhausted_attempts_record_final_exception() -> None:
     )
     runner = EvalRunner(client=client, concurrent_limit=1)
 
-    predictions, metadata = await runner._generate_predictions(_dataset())
+    dataset = _dataset()
+    prediction, metadata = await runner._generate_one(dataset, 0, dataset.goldens[0])
 
     assert client.calls == 3
-    assert predictions == [""]
-    assert metadata[0]["inference_failed"] is True
-    assert metadata[0]["inference_error"] == "final"
+    assert prediction == ""
+    assert metadata["inference_failed"] is True
+    assert metadata["inference_error"] == "final"
 
 
 @pytest.mark.asyncio
@@ -172,21 +176,18 @@ class _OtherMetric:
 
 
 def _run_dataset(num_samples: int) -> SimpleNamespace:
-    def build_test_cases(predictions: list[str]) -> list[LLMTestCase]:
-        return [
-            LLMTestCase(
-                input=f"question {sample_id}",
-                actual_output=prediction,
-                additional_metadata={"_sample_id": sample_id},
-            )
-            for sample_id, prediction in enumerate(predictions)
-        ]
+    def build_test_case(idx: int, _golden: object, prediction: str) -> LLMTestCase:
+        return LLMTestCase(
+            input=f"question {idx}",
+            actual_output=prediction,
+            additional_metadata={"_sample_id": idx},
+        )
 
     return SimpleNamespace(
         name="retry_dataset",
         goldens=list(range(num_samples)),
         get_generation_input=lambda golden: [{"role": "user", "content": str(golden)}],
-        build_test_cases=build_test_cases,
+        build_test_case=build_test_case,
     )
 
 
@@ -239,16 +240,11 @@ async def test_run_skips_failed_inference_cases_during_judge_evaluation(
     captured = _capture_built_results(runner, monkeypatch)
     evaluated_ids: list[int] = []
 
-    def evaluate_scorable(test_cases, **_kwargs):
-        evaluated_ids.extend(tc.additional_metadata["_sample_id"] for tc in test_cases)
-        return {
-            sample_id: [
-                MetricScore(name="metric", score=1.0, success=True, reason="ok")
-            ]
-            for sample_id in evaluated_ids
-        }
+    async def evaluate_scorable(test_case, *_args, **_kwargs):
+        evaluated_ids.append(test_case.additional_metadata["_sample_id"])
+        return [MetricScore(name="metric", score=1.0, success=True, reason="ok")]
 
-    monkeypatch.setattr("coeval.core.runner.evaluate", evaluate_scorable)
+    monkeypatch.setattr("coeval.core.runner.a_evaluate_one", evaluate_scorable)
 
     summary = await runner.run(_run_dataset(2), [_Metric()], avg_aggregator)
 
@@ -271,10 +267,10 @@ async def test_run_does_not_call_judge_when_all_inferences_fail(
     )
     captured = _capture_built_results(runner, monkeypatch)
 
-    def evaluate_must_not_run(*_args, **_kwargs):
+    async def evaluate_must_not_run(*_args, **_kwargs):
         raise AssertionError("Judge evaluation must be skipped")
 
-    monkeypatch.setattr("coeval.core.runner.evaluate", evaluate_must_not_run)
+    monkeypatch.setattr("coeval.core.runner.a_evaluate_one", evaluate_must_not_run)
 
     summary = await runner.run(_run_dataset(2), [_Metric()], avg_aggregator)
 
@@ -290,6 +286,7 @@ def _metadata(sample_id: int, *, inference_failed: bool = False) -> dict[str, ob
         "sample_id": sample_id,
         "rationale": "",
         "generation_time_ms": 1.0,
+        "scoring_time_ms": 2.0,
         "inference_failed": inference_failed,
         "inference_error": "candidate failure" if inference_failed else None,
     }
@@ -483,3 +480,37 @@ def test_console_reports_scoring_failures_in_denominator_and_annotation() -> Non
     assert "1/1" in message
     assert "1 inference failures" in message
     assert "1 scoring failures" in message
+
+
+@pytest.mark.asyncio
+async def test_judging_overlaps_generation() -> None:
+    """Judging must start before the whole generation pass finishes.
+
+    Sample 1 generates instantly while sample 0 is still in flight, so its score
+    has to land before sample 0's generation completes. A phase barrier between
+    generation and judging would put every "judged" event after every
+    "generated" one.
+    """
+    events: list[str] = []
+
+    class _StaggeredClient:
+        async def generate(self, messages: list[dict]) -> str:
+            sample_id = int(messages[-1]["content"])
+            if sample_id == 0:
+                await asyncio.sleep(0.2)
+            events.append(f"generated:{sample_id}")
+            return f"answer {sample_id}"
+
+    class _RecordingMetric(DeterministicMetric):
+        @property
+        def __name__(self) -> str:
+            return "recording"
+
+        def measure(self, test_case, *_args, **_kwargs) -> float:
+            events.append(f"judged:{test_case.additional_metadata['_sample_id']}")
+            return self._set_result(test_case, is_correct=True, reason="", details={})
+
+    runner = EvalRunner(client=_StaggeredClient(), concurrent_limit=2)
+    await runner.run(_run_dataset(2), [_RecordingMetric()], avg_aggregator)
+
+    assert events.index("judged:1") < events.index("generated:0"), events

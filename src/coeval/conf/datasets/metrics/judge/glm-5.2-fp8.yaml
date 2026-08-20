@@ -2,13 +2,13 @@ _target_: coeval.clients.PassthroughJudge
 config:
   _target_: coeval.llm.config.LLMConfig
   _convert_: all
-  api_base: http://shared-cluster-vm-026:10531/v1
-  model: gpt-5.6-sol
+  api_base: http://shared-cluster-vm-026:5500/v1
+  model: glm-5.2-fp8
   api_key: local-no-auth
-  temperature: 0.0
-  max_tokens: 32768
-  timeout: 600
+  temperature: 1.0
+  max_tokens: 16384
+  timeout: 120
   max_retries: 0
   additional_kwargs:
-    reasoning_effort: low
+    top_p: 1.0
     seed: 42
