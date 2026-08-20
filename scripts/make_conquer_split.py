@@ -24,14 +24,14 @@ could re-run it with the documented sizes and recover the exact test ids in
 seconds. Salting the per-theme ordering breaks that. Publishing the val ids stays
 safe because recovering the salt from them is a 2^128 search.
 
-Keep the salt with the test id list, outside the repo. Losing it costs
-reproducibility of this split; leaking it costs the holdout.
+Keep the salt with the test id list, on storage outside this repository. Losing
+it costs reproducibility of this split; leaking it costs the holdout.
 
 Usage:
     SALT=$(openssl rand -hex 32)
     python scripts/make_conquer_split.py --n-val 300 --n-test 500 --salt "$SALT" \
         --val-out src/coeval/data/conquer_val_ids.json \
-        --test-out /mnt/vast/lunit/coe_evaluation/conquer/conquer_test_ids.json
+        --test-out <held-out-dir>/conquer_test_ids.json
 """
 
 from __future__ import annotations

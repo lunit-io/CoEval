@@ -8,8 +8,9 @@
 #
 # The split generator is public too, so it takes a mandatory high-entropy --salt;
 # without one the selection is a pure function of the sizes quoted below and this
-# repository would contain the holdout. Salt and test id list live together at
-# /mnt/vast/lunit/coe_evaluation/conquer/ and neither belongs in git.
+# repository would contain the holdout. The salt lives beside the test id list on
+# internal shared storage; neither belongs in git, and the location is
+# communicated to run operators out of band.
 #
 # 500 examples / 5,659 judge calls per submission. Measured projections at 20
 # parallel submissions: judging 38 min (fleet-bound at 50.7 req/s), generation
@@ -23,7 +24,7 @@
 # tiebreak before results exist.
 #
 #   uv run coeval datasets=conquer_test \
-#     '++datasets.conquer_test.ids_path=/mnt/vast/lunit/coe_evaluation/conquer/conquer_test_ids.json' \
+#     '++datasets.conquer_test.ids_path=<held-out-dir>/conquer_test_ids.json' \
 #     client.llm.config.api_base=http://<team-container>:8000/v1 \
 #     client.llm.config.model=team-chatbot
 
