@@ -7,16 +7,28 @@ the hackathon dashboard.
 
 Three things this does that a plain sort of ``summary.metric_scores`` does not:
 
-1. **Common-item intersection.** A judge infrastructure failure excludes that
-   example for that team only, so two teams can end up averaged over different
-   item sets. Comparing those means is not sound. Every team is rescored over
-   the items successfully graded for *all* of them, and the discarded count is
-   reported rather than hidden.
+1. **Common-item intersection, at test time only.** A judge infrastructure
+   failure excludes that example for that team alone, so two teams can end up
+   averaged over different item sets, and comparing those means is not sound.
+   For the official run every team is rescored over the items graded for *all*
+   of them, and the discarded count is reported rather than hidden.
+
+   The live board deliberately does not do this. Intersecting there would mean
+   one team's judge failure silently moves every other team's displayed score,
+   so a team's number could change without them resubmitting -- which reads as a
+   broken leaderboard. The live board is a development signal, so each team is
+   scored on its own graded items and told how many of its own were ungradeable.
 
 2. **Paired bootstrap.** Item difficulty is a nuisance term shared by every
    team. Resampling the item indices once per iteration and applying that same
    resample to all teams keeps comparisons paired, so the interval on a
    *difference* is much tighter than two independent intervals would suggest.
+
+   Ranking is by raw score in both regimes: entries are sorted on the score and
+   ``rank`` is strictly positional. ``tied_with_ranks`` is reported alongside as
+   information and never collapses two ranks into one. On the live board it is
+   best rendered as a footnote; for the official result it is the basis of the
+   pre-declared tiebreak.
 
 3. **Honest uncertainty.** The bootstrap captures item-sampling variance only.
    Repeat runs of an identical configuration measured sd 0.0174 at n=200 --
@@ -161,15 +173,31 @@ def clipped_mean(values: list[float]) -> float:
 
 
 def bootstrap(
-    subs: list[Submission], common: list[int], iterations: int, seed: int
+    subs: list[Submission],
+    items_for: dict[str, list[int]],
+    iterations: int,
+    seed: int,
+    *,
+    paired: bool,
 ) -> dict[str, list[float]]:
-    """Paired bootstrap: one resample of item indices, applied to every team."""
+    """Resample items to get a sampling distribution of each team's score.
+
+    ``paired`` draws one resample per iteration and applies it to every team, so
+    item difficulty -- a nuisance term they share -- cancels in any comparison
+    between them. That needs a common item set, so it is only available when the
+    caller intersected. Unpaired, each team is resampled over its own items and
+    comparisons carry both teams' variance.
+    """
     rng = random.Random(seed)
-    n = len(common)
     draws: dict[str, list[float]] = {s.team: [] for s in subs}
     for _ in range(iterations):
-        idx = [common[rng.randrange(n)] for _ in range(n)]
+        shared = None
+        if paired:
+            pool = items_for[subs[0].team]
+            shared = [pool[rng.randrange(len(pool))] for _ in range(len(pool))]
         for sub in subs:
+            pool = items_for[sub.team]
+            idx = shared or [pool[rng.randrange(len(pool))] for _ in range(len(pool))]
             draws[sub.team].append(clipped_mean([sub.item_scores[i] for i in idx]))
     return draws
 
@@ -197,6 +225,25 @@ def main() -> None:
         help="how many leading teams to flag for a multi-vote runoff",
     )
     ap.add_argument(
+        "--previous",
+        type=Path,
+        default=None,
+        help=(
+            "a prior leaderboard JSON. Emits per-entry delta plus a significance "
+            "verdict, so the dashboard decides whether a resubmission counts as "
+            "an improvement from a boolean rather than picking a threshold itself."
+        ),
+    )
+    ap.add_argument(
+        "--pair-items",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help=(
+            "score every team over the intersection of gradeable items. 'auto' "
+            "means on for --stage official and off for provisional."
+        ),
+    )
+    ap.add_argument(
         "--runoff-max",
         type=int,
         default=4,
@@ -214,20 +261,40 @@ def main() -> None:
     subs = [load_submission(d, args.dataset) for d in team_dirs]
     check_same_items(subs)
 
-    all_ids = set(subs[0].input_fingerprint)
-    common = sorted(set.intersection(*(set(s.item_scores) for s in subs)))
-    if not common:
-        raise SystemExit("no item was successfully graded for every team")
-    dropped = sorted(all_ids - set(common))
+    previous: dict[str, float] = {}
+    if args.previous and args.previous.exists():
+        prior = json.loads(args.previous.read_text())
+        previous = {e["team"]: e["score"] for e in prior.get("entries", [])}
 
-    draws = bootstrap(subs, common, args.iterations, args.seed)
-    noise_sd = run_noise_sd(len(common))
+    all_ids = set(subs[0].input_fingerprint)
+    pair_items = (
+        args.stage == "official"
+        if args.pair_items == "auto"
+        else args.pair_items == "on"
+    )
+
+    if pair_items:
+        common = sorted(set.intersection(*(set(s.item_scores) for s in subs)))
+        if not common:
+            raise SystemExit("no item was successfully graded for every team")
+        items_for = dict.fromkeys((s.team for s in subs), common)
+        dropped = sorted(all_ids - set(common))
+    else:
+        items_for = {s.team: sorted(s.item_scores) for s in subs}
+        if not all(items_for.values()):
+            empty = [t for t, v in items_for.items() if not v]
+            raise SystemExit(f"no item was gradeable at all for: {', '.join(empty)}")
+        common = sorted(set.union(*(set(v) for v in items_for.values())))
+        dropped = []
+
+    draws = bootstrap(subs, items_for, args.iterations, args.seed, paired=pair_items)
+    noise_sd = run_noise_sd(min(len(v) for v in items_for.values()))
     z = 1.959964 if abs(args.confidence - 0.95) < 1e-9 else 1.959964
     lo_q, hi_q = (1 - args.confidence) / 2, 1 - (1 - args.confidence) / 2
 
     scored = []
     for sub in subs:
-        vals = [sub.item_scores[i] for i in common]
+        vals = [sub.item_scores[i] for i in items_for[sub.team]]
         score = clipped_mean(vals)
         boot = draws[sub.team]
         boot_sd = st.pstdev(boot) if len(boot) > 1 else 0.0
@@ -271,6 +338,28 @@ def main() -> None:
             flags.append("high_failure_rate")
         if sub.n_inference_failed > 0.02 * sub.n_items:
             flags.append("endpoint_failures_scored_zero")
+        # Whether a resubmission actually moved. Both runs carry run-to-run noise,
+        # so the difference has sd = sqrt(2) * noise_sd. Reporting a raw delta
+        # without this verdict invites "you improved by 1 point" when the honest
+        # statement is "no measurable change".
+        delta_threshold = z * math.sqrt(2) * noise_sd
+        delta_block: dict[str, object] = {}
+        if sub.team in previous:
+            delta = e["score"] - previous[sub.team]
+            delta_block = {
+                "previous_score": round(previous[sub.team], 4),
+                "delta": round(delta, 4),
+                "delta_threshold": round(delta_threshold, 4),
+                "delta_significant": abs(delta) > delta_threshold,
+                "delta_verdict": (
+                    "improved"
+                    if delta > delta_threshold
+                    else "regressed"
+                    if delta < -delta_threshold
+                    else "no significant change"
+                ),
+            }
+
         entries.append(
             {
                 "rank": i + 1,
@@ -285,12 +374,13 @@ def main() -> None:
                 "sd_item_sampling": round(e["boot_sd"], 4),
                 "sd_total": round(e["total_sd"], 4),
                 "tied_with_ranks": ties,
-                "n_scored": len(common),
+                "n_scored": len(items_for[sub.team]),
+                "n_ungraded": sub.n_items - len(items_for[sub.team]),
                 "n_items": sub.n_items,
                 "n_inference_failed": sub.n_inference_failed,
                 "n_scoring_failed": sub.n_scoring_failed,
-                "axis_scores": mean_axis(sub, common),
-                "theme_scores": mean_theme(sub, common),
+                "axis_scores": mean_axis(sub, items_for[sub.team]),
+                "theme_scores": mean_theme(sub, items_for[sub.team]),
                 "mean_response_chars": round(st.mean(sub.response_chars))
                 if sub.response_chars
                 else None,
@@ -298,6 +388,7 @@ def main() -> None:
                 if sub.latencies_ms
                 else None,
                 "flags": flags,
+                **delta_block,
                 "submission": sub.meta,
             }
         )
@@ -335,7 +426,13 @@ def main() -> None:
             "aggregation": "clipped mean over the common item set",
             "bootstrap_iterations": args.iterations,
             "confidence": args.confidence,
+            "item_pairing": "intersection" if pair_items else "per-team",
+            "ranking": "raw score, descending; rank is positional",
+            "tie_reporting": (
+                "tied_with_ranks is informational and never merges two ranks"
+            ),
             "run_to_run_sd": round(noise_sd, 4),
+            "delta_threshold": round(z * math.sqrt(2) * noise_sd, 4),
             "run_to_run_basis": (
                 f"measured sd {RUN_NOISE_SD_AT[0]} over 6 identical runs at "
                 f"n={RUN_NOISE_SD_AT[1]}, scaled by 1/sqrt(n)"
@@ -353,10 +450,20 @@ def main() -> None:
         "entries": entries,
         "runoff_candidates": runoff,
         "runoff_excluded_count": runoff_truncated,
-        "notes": [
-            f"{len(dropped)} of {subs[0].n_items} items were not gradeable for every "
-            "team and are excluded from all scores so the comparison stays paired.",
-        ]
+        "notes": (
+            [
+                f"{len(dropped)} of {subs[0].n_items} items were not gradeable for "
+                "every team and are excluded from all scores so the comparison stays "
+                "paired."
+            ]
+            if pair_items
+            else [
+                "Each team is scored on its own gradeable items (see n_ungraded per "
+                "entry). Scores are not strictly paired across teams, which is the "
+                "right trade for a development signal: intersecting would let one "
+                "team's judge failure move everyone else's displayed score."
+            ]
+        )
         + (
             [
                 f"{runoff_truncated} further team(s) are statistically tied with the "

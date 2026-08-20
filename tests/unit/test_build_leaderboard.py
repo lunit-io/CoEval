@@ -243,3 +243,129 @@ class TestNoiseModel:
         assert bl.clipped_mean([-0.5, -0.5]) == 0.0
         assert bl.clipped_mean([1.5, 1.5]) == 1.0
         assert bl.clipped_mean([0.25, 0.75]) == pytest.approx(0.5)
+
+
+class TestLiveBoardScoring:
+    """The live board is a development signal, so it must not let one team's
+    judge failure move another team's number."""
+
+    def test_provisional_does_not_intersect_across_teams(self, tmp_path: Path) -> None:
+        clean = dict.fromkeys(range(100), 0.5)
+        with_gap = dict(clean)
+        with_gap[7] = None  # judge failed on this item, for this team only
+        write_run(tmp_path / "runs", "clean", clean)
+        write_run(tmp_path / "runs", "gappy", with_gap)
+        payload = run_script(
+            tmp_path / "runs", tmp_path / "lb.json", "--stage", "provisional"
+        )
+        by_team = {e["team"]: e for e in payload["entries"]}
+        assert by_team["clean"]["n_scored"] == 100
+        assert by_team["clean"]["n_ungraded"] == 0
+        assert by_team["gappy"]["n_scored"] == 99
+        assert by_team["gappy"]["n_ungraded"] == 1
+        assert payload["scoring"]["item_pairing"] == "per-team"
+
+    def test_official_still_intersects(self, tmp_path: Path) -> None:
+        clean = dict.fromkeys(range(100), 0.5)
+        with_gap = dict(clean)
+        with_gap[7] = None
+        write_run(tmp_path / "runs", "clean", clean)
+        write_run(tmp_path / "runs", "gappy", with_gap)
+        payload = run_script(
+            tmp_path / "runs", tmp_path / "lb.json", "--stage", "official"
+        )
+        assert payload["scoring"]["item_pairing"] == "intersection"
+        assert all(e["n_scored"] == 99 for e in payload["entries"])
+
+    def test_pairing_can_be_forced_either_way(self, tmp_path: Path) -> None:
+        scores = dict.fromkeys(range(60), 0.5)
+        write_run(tmp_path / "runs", "aa", scores)
+        write_run(tmp_path / "runs", "bb", dict(scores))
+        forced_off = run_script(
+            tmp_path / "runs",
+            tmp_path / "a.json",
+            "--stage",
+            "official",
+            "--pair-items",
+            "off",
+        )
+        assert forced_off["scoring"]["item_pairing"] == "per-team"
+        forced_on = run_script(
+            tmp_path / "runs",
+            tmp_path / "b.json",
+            "--stage",
+            "provisional",
+            "--pair-items",
+            "on",
+        )
+        assert forced_on["scoring"]["item_pairing"] == "intersection"
+
+    def test_rank_is_positional_and_ties_never_merge_ranks(
+        self, tmp_path: Path
+    ) -> None:
+        """Ranking is on raw score even when the gap is inside noise; the tie flag
+        is information, not a ranking rule."""
+        scores = {i: (i % 10) / 10 for i in range(200)}
+        nudged = {i: min(1.0, v + 0.005) for i, v in scores.items()}
+        write_run(tmp_path / "runs", "lower", scores)
+        write_run(tmp_path / "runs", "higher", nudged)
+        payload = run_script(
+            tmp_path / "runs", tmp_path / "lb.json", "--stage", "provisional"
+        )
+        assert [e["rank"] for e in payload["entries"]] == [1, 2]
+        assert payload["entries"][0]["team"] == "higher"
+        assert payload["entries"][0]["tied_with_ranks"] == [2]
+
+
+class TestResubmissionDelta:
+    """A raw delta without a significance verdict invites reporting noise as
+    progress: at n~300 a change under ~4 points is not measurable."""
+
+    @staticmethod
+    def _first_run(tmp_path: Path, score: float) -> Path:
+        write_run(tmp_path / "runs", "solo", dict.fromkeys(range(300), score))
+        write_run(tmp_path / "runs", "other", dict.fromkeys(range(300), 0.5))
+        out = tmp_path / "prev.json"
+        run_script(tmp_path / "runs", out, "--stage", "provisional")
+        return out
+
+    def _resubmit(self, tmp_path: Path, new_score: float, prev: Path) -> dict:
+        write_run(tmp_path / "runs", "solo", dict.fromkeys(range(300), new_score))
+        payload = run_script(
+            tmp_path / "runs",
+            tmp_path / "now.json",
+            "--stage",
+            "provisional",
+            "--previous",
+            str(prev),
+        )
+        return next(e for e in payload["entries"] if e["team"] == "solo")
+
+    def test_large_gain_is_reported_as_improvement(self, tmp_path: Path) -> None:
+        prev = self._first_run(tmp_path, 0.40)
+        entry = self._resubmit(tmp_path, 0.60, prev)
+        assert entry["delta_verdict"] == "improved"
+        assert entry["delta_significant"] is True
+        assert entry["previous_score"] == pytest.approx(0.40, abs=1e-3)
+
+    def test_small_gain_is_not_reported_as_improvement(self, tmp_path: Path) -> None:
+        prev = self._first_run(tmp_path, 0.40)
+        entry = self._resubmit(tmp_path, 0.41, prev)
+        assert entry["delta_verdict"] == "no significant change"
+        assert entry["delta_significant"] is False
+
+    def test_large_loss_is_reported_as_regression(self, tmp_path: Path) -> None:
+        prev = self._first_run(tmp_path, 0.60)
+        entry = self._resubmit(tmp_path, 0.40, prev)
+        assert entry["delta_verdict"] == "regressed"
+
+    def test_absent_previous_run_yields_no_delta_fields(self, tmp_path: Path) -> None:
+        scores = dict.fromkeys(range(80), 0.5)
+        write_run(tmp_path / "runs", "aa", scores)
+        write_run(tmp_path / "runs", "bb", dict(scores))
+        payload = run_script(
+            tmp_path / "runs", tmp_path / "lb.json", "--stage", "provisional"
+        )
+        assert "delta" not in payload["entries"][0]
+        # The threshold is still published so the UI can explain the rule.
+        assert payload["scoring"]["delta_threshold"] > 0

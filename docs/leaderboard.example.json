@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-20T05:41:03+00:00",
+  "generated_at": "2026-08-20T06:16:10+00:00",
   "stage": "official",
   "dataset": {
     "name": "conquer_test",
@@ -17,7 +17,11 @@
     "aggregation": "clipped mean over the common item set",
     "bootstrap_iterations": 10000,
     "confidence": 0.95,
+    "item_pairing": "intersection",
+    "ranking": "raw score, descending; rank is positional",
+    "tie_reporting": "tied_with_ranks is informational and never merges two ranks",
     "run_to_run_sd": 0.011,
+    "delta_threshold": 0.0305,
     "run_to_run_basis": "measured sd 0.0174 over 6 identical runs at n=200, scaled by 1/sqrt(n)",
     "ci_note": "ci_item_sampling is the paired bootstrap over items. ci_low/ci_high additionally fold in run-to-run noise, which a bootstrap over items cannot see, and are the interval to quote.",
     "tie_rule": "two teams tie when the interval on their paired score difference contains zero after run-to-run noise is included"
@@ -37,6 +41,7 @@
       "sd_total": 0.0159,
       "tied_with_ranks": [],
       "n_scored": 499,
+      "n_ungraded": 1,
       "n_items": 500,
       "n_inference_failed": 0,
       "n_scoring_failed": 0,
@@ -86,6 +91,7 @@
         3
       ],
       "n_scored": 499,
+      "n_ungraded": 1,
       "n_items": 500,
       "n_inference_failed": 0,
       "n_scoring_failed": 0,
@@ -135,6 +141,7 @@
         2
       ],
       "n_scored": 499,
+      "n_ungraded": 1,
       "n_items": 500,
       "n_inference_failed": 0,
       "n_scoring_failed": 1,
@@ -184,6 +191,7 @@
         5
       ],
       "n_scored": 499,
+      "n_ungraded": 1,
       "n_items": 500,
       "n_inference_failed": 14,
       "n_scoring_failed": 0,
@@ -235,6 +243,7 @@
         4
       ],
       "n_scored": 499,
+      "n_ungraded": 1,
       "n_items": 500,
       "n_inference_failed": 0,
       "n_scoring_failed": 0,

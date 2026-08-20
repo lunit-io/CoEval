@@ -17,6 +17,50 @@ Each team subdirectory holds that submission's CoEval `results_<dataset>.json`,
 plus an optional `submission.json` whose contents are passed through verbatim
 under `entries[].submission`.
 
+## Two regimes
+
+`--stage` selects more than a label. The live board and the official result want
+different behaviour, and `auto` pairing follows the stage.
+
+| | `provisional` (live board) | `official` (final) |
+|---|---|---|
+| Item set | each team scored on **its own** gradeable items | **intersection** across all teams |
+| `scoring.item_pairing` | `per-team` | `intersection` |
+| Why | one team's judge failure must not move another team's number; a score changing without a resubmission reads as a broken board | comparing means over different item sets is not sound when money depends on it |
+| Ties | informational footnote | basis of the pre-declared tiebreak |
+
+Ranking is by raw score in both: entries are sorted on `score` and `rank` is
+positional. `tied_with_ranks` never merges two ranks.
+
+## Resubmissions
+
+The script scores one run; **which run represents a team is the dashboard's
+call**, since history lives in its database. Pass the prior payload as
+`--previous` and each entry gains a verdict to decide on:
+
+```json
+"previous_score": 0.4562, "delta": 0.0223,
+"delta_threshold": 0.0393, "delta_significant": false,
+"delta_verdict": "no significant change"
+```
+
+`delta_verdict` is one of `improved`, `regressed`, `no significant change`.
+Render those three states off `delta_verdict` rather than comparing numbers: at
+n≈300 two runs differ with sd `sqrt(2) x 0.0142`, so **a change under about 4
+points is not measurable**. Telling a team "you improved 2 points" when the
+threshold is 4 reports noise as progress.
+
+`scoring.delta_threshold` is published even with no `--previous`, so the UI can
+always explain the rule.
+
+One caveat if the displayed score is kept as a running best (only replaced on
+improvement). That is a reasonable choice for a development signal, but it is
+biased upward by submission count — keeping the max of N noisy runs inflates the
+score by roughly +0.8 points at N=2, +1.7 at N=5, +2.7 at N=20, with no
+underlying improvement. Harmless while val ranking decides nothing. If the
+top-10 gate ends up coming off this board, rank on the latest run instead, or
+show both and label which is which.
+
 ## Minimal render
 
 Three fields are enough for the page as scoped: `entries[].rank`,
@@ -62,7 +106,8 @@ Two are worth adding cheaply, because leaving them out changes what the page
 | `ci_item_sampling` | [float, float] | Bootstrap only. Narrower, and incomplete — do not display this as *the* CI. |
 | `sd_item_sampling`, `sd_total` | float | The two components. |
 | `tied_with_ranks` | int[] | Ranks statistically indistinguishable from this one. |
-| `n_scored`, `n_items` | int | Identical for all entries by construction. |
+| `n_scored`, `n_items` | int | Identical for all entries under `official`; per-team under `provisional`. |
+| `n_ungraded` | int | This team's own items the judge could not grade. Worth surfacing on the live board so a team can tell a low score from an incomplete run. |
 | `n_inference_failed` | int | Their endpoint erred, timed out, or returned nothing. Scored 0, not dropped. |
 | `n_scoring_failed` | int | Our judge failed. Excluded from everyone's score. |
 | `axis_scores` | object | 5 keys: `accuracy`, `completeness`, `context_awareness`, `communication_quality`, `instruction_following`. The interesting breakdown for a health chatbot. |
@@ -74,9 +119,10 @@ Two are worth adding cheaply, because leaving them out changes what the page
 
 ## Guarantees
 
-- **Every entry is scored over the identical item set.** A judge failure
-  excludes that item for *all* teams, not just the affected one, so the
-  comparison stays paired. `dataset.n_dropped` reports the cost.
+- **Under `official`, every entry is scored over the identical item set.** A
+  judge failure excludes that item for *all* teams, so the comparison stays
+  paired; `dataset.n_dropped` reports the cost. Under `provisional` each team
+  keeps its own items and `n_ungraded` reports its own losses.
 - **The script refuses to rank incomparable runs.** Differing `sample_id` sets,
   or the same `sample_id` carrying different prompt text, is a hard error rather
   than a silently skewed table.
