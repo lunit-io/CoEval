@@ -22,9 +22,9 @@
 # hackathon fleets (L1 8x tp=1 behind a cache_aware router; DeepSeek 9 workers;
 # GLM 6 workers), at 20 parallel submissions:
 #
-#   generation  10,000 completions @ 4.87 req/s  = 34 min
+#   generation  10,000 completions @ 6.75 req/s  = 25 min
 #   judging    113,800 calls      @ 41.4 req/s   = 46 min
-#   overlapped (different hardware)              ~46 min
+#   overlapped (different hardware)              ~46 min, judge-bound
 #
 # n=1000 does not fit the 1.5h window: judging alone is 92 min. Adding judge
 # workers does not help, because the ceiling below is a router admission limit
@@ -74,14 +74,19 @@ score_aggregators:
     _partial_: true
 
 runner:
-  # 20 x 6 = 120, under the measured generation ceiling for the REAL workload.
-  # That ceiling depends on prompt size, which is easy to get wrong: with bare
-  # prompts the fleet serves C=256 cleanly at 8.5 req/s, but with 4k tokens of
-  # retrieved context C=256 returns HTTP 503 for every single request. It is
-  # clean at C=128 (4.87 req/s) and sheds somewhere between. Since teams are
-  # building guideline RAG, the RAG figure is the one that governs, and a cap
-  # set from bare-prompt measurements would 503 under the actual submissions.
-  concurrent_limit: 6
+  # 20 x 12 = 240 aggregate, validated the way it will actually be used: 20
+  # independent clients, each with its own system prompt and its own retrieved
+  # passages, so no prefix is shared between teams. Both routers run
+  # --policy cache_aware, and a single-client benchmark sharing one prompt
+  # prefix flatters that policy in a way 20 real teams will not.
+  #
+  # Measured under those conditions with 4k tokens of RAG context: aggregate 240
+  # gives 6.75 req/s with zero failures, aggregate 120 gives 5.20 req/s. Slowest
+  # team ran 1.6x behind the fastest, so no starvation. Bare-prompt single-client
+  # runs shed above ~256 (252 of 768 rejected at C=512), so 240 sits under the
+  # ceiling with margin -- worth keeping, since shedding drops examples and
+  # dropped examples differ per team, which breaks the comparison.
+  concurrent_limit: 12
   # Two attempts, not three: retrying a 180s timeout three times burns 9 minutes
   # on a single stuck item. A per-submission wall-clock budget is the backstop.
   inference_max_attempts: 2

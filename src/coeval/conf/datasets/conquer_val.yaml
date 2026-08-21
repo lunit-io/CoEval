@@ -63,10 +63,10 @@ score_aggregators:
     _partial_: true
 
 runner:
-  # Held well under the generation ceiling, which for RAG-sized prompts is ~128
-  # aggregate and not the ~256 that bare prompts suggest. Val also shares L1
-  # with teams' live development traffic, and starving interactive dev to speed
-  # up a leaderboard refresh is the wrong trade.
+  # Deliberately below what the fleet can take. Val runs share L1 with teams'
+  # live development traffic, and starving interactive dev to speed up a
+  # leaderboard refresh is the wrong trade. The generation ceiling itself is
+  # around 256 aggregate; see conquer_test.yaml for how that was measured.
   concurrent_limit: 16
   inference_max_attempts: 2
   inference_retry_delay_s: 2.0
