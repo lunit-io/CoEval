@@ -18,17 +18,16 @@
 # while the test size is still open, and the test size can be settled at scoring
 # time against measured capacity by re-running the generator with the same salt.
 #
-# 500 examples / 5,690 judge calls per submission. Re-measured on the final
-# hackathon fleets (L1 8x tp=1 behind a cache_aware router; DeepSeek 9 workers;
-# GLM 6 workers), at 20 parallel submissions:
+# 500 examples / 5,690 judge calls per submission. Re-measured against the
+# served hackathon fleets at 20 parallel submissions:
 #
 #   generation  10,000 completions @ 6.75 req/s  = 25 min
 #   judging    113,800 calls      @ 41.4 req/s   = 46 min
 #   overlapped (different hardware)              ~46 min, judge-bound
 #
 # n=1000 does not fit the 1.5h window: judging alone is 92 min. Adding judge
-# workers does not help, because the ceiling below is a router admission limit
-# rather than a capacity one -- it did not move when the fleet went to 9 workers.
+# capacity does not help either: the ceiling below is a router admission limit
+# rather than a throughput one, and it did not move when the fleet was scaled out.
 #
 # Run-to-run noise is sd 0.011 at this size (measured 0.017 at n=200, scaled by
 # 1/sqrt(n)), so teams within ~3 points are a statistical tie. Rank with a
@@ -76,9 +75,9 @@ score_aggregators:
 runner:
   # 20 x 12 = 240 aggregate, validated the way it will actually be used: 20
   # independent clients, each with its own system prompt and its own retrieved
-  # passages, so no prefix is shared between teams. Both routers run
-  # --policy cache_aware, and a single-client benchmark sharing one prompt
-  # prefix flatters that policy in a way 20 real teams will not.
+  # passages, so no prefix is shared between teams. The routers route with
+  # prefix-cache affinity, and a single-client benchmark reusing one prompt
+  # prefix flatters that in a way 20 real teams will not.
   #
   # Measured under those conditions with 4k tokens of RAG context: aggregate 240
   # gives 6.75 req/s with zero failures, aggregate 120 gives 5.20 req/s. Slowest
