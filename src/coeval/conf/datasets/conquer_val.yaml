@@ -8,8 +8,11 @@
 # score. That matching is load-bearing: it is what makes per-item overfitting
 # self-punishing instead of merely unlucky.
 #
-# ~301 examples / 3,423 judge calls. Measured wall clock: ~3 min solo, ~11 min
-# with 10 concurrent submissions, ~23 min if all 20 land at once.
+# ~301 examples / 3,337 judge calls. Wall clock depends sharply on the judge,
+# re-measured on the final fleets: DeepSeek grades at 41.4 req/s (92 completion
+# tokens per verdict) and GLM at 13.3 req/s (434 tokens), so a solo val run is
+# 1.3 min on DeepSeek against 4.2 min on GLM, and 20 simultaneous runs are 27 min
+# against 84 min.
 #
 # Concurrency is deliberately lower than conquer_test: val runs share L1 with
 # teams' live development traffic, and starving interactive dev to speed up a
@@ -19,11 +22,17 @@
 #     client.llm.config.api_base=http://<team-container>:8000/v1 \
 #     client.llm.config.model=team-chatbot
 #
-# NOTE: the team's intended val judge is GLM-5.2-fp8. Agreement between it and
-# the DeepSeek test judge is UNVERIFIED (GLM was unreachable at measurement
-# time). Until that check runs, an unmeasured offset between the two judges
-# could exceed the gaps deciding the award. To grade val with the test judge
-# instead: datasets/metrics/judge@conquer_judge=deepseek-v4-pro
+# JUDGE ASYMMETRY, now measured. Grading 393 identical responses with both
+# judges: per-criterion agreement 83.2% (Cohen's kappa 0.665), per-example
+# Pearson r 0.874, and GLM marks criteria met 52.9% of the time against DeepSeek's
+# 47.8%. GLM therefore scores the same answers +0.0439 higher.
+#
+# Rank correlation is good, so val remains a usable relative signal. But that
+# offset is larger than the ~3-point spread that separates teams at n=500, so
+# grading val and test with different judges shifts the level by more than the
+# amount the ranking can resolve. Either grade both with the same judge -- which
+# also makes val 3x faster -- or state the expected drop up front, so a team does
+# not read a 4-point fall at the freeze as something having broken.
 
 defaults:
   - metrics/judge@conquer_judge: glm-5.2-fp8
@@ -54,7 +63,11 @@ score_aggregators:
     _partial_: true
 
 runner:
-  concurrent_limit: 32
+  # Held well under the generation ceiling, which for RAG-sized prompts is ~128
+  # aggregate and not the ~256 that bare prompts suggest. Val also shares L1
+  # with teams' live development traffic, and starving interactive dev to speed
+  # up a leaderboard refresh is the wrong trade.
+  concurrent_limit: 16
   inference_max_attempts: 2
   inference_retry_delay_s: 2.0
   # A team whose endpoint errors or returns an empty answer must score 0, not
